@@ -9,7 +9,7 @@ aPackageInfo = [
 	:ringversion = "1.24",
 	:versions = 	[
 		[
-			:version = "1.0.0",
+			:version = "1.0.1",
 			:branch = "master"
 		]
 	],
@@ -30,11 +30,15 @@ aPackageInfo = [
 		"Quotes-Mega-62.ini",
 		"Quotes-Mega-900.ini",
 		"Quotes.ini",
-		"Stock-Analysis-BM.bat",
-		"Stock-Analysis-BM.ring",
 		"Stock-Analysis-Chart-1.png",
+		"Stock-Analysis-BM.bat",		
+		"Stock-Analysis-BM.ring",
 		"Stock-DrawChart.ring",
-		"Stock-YearlyReturns.ring"
+		"Stock-YearlyReturns.ring",	
+        "Stock-AlgoGrid.ring",
+        "Stock-BuyHistory.ring",
+        "Stock-StockContrib.ring",
+        "Stock-YearlyVsQQQ.ring"		
 	],
 	:ringfolderfiles = 	[
 

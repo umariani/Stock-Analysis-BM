@@ -9,7 +9,7 @@ aPackageInfo = [
 	:ringversion = "1.24",
 	:versions = 	[
 		[
-			:version = "1.0.1",
+			:version = "1.0.2",
 			:branch = "master"
 		]
 	],

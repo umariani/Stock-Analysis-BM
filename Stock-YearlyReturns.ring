@@ -15,9 +15,9 @@
 # =========================================
 
 
-//$RangeMth   = 7        // Performance EndCol - StartCol
-//$Top10   = 7        // Short-10.csv  Long = 10     // Buy if Rank <= 10
-//csvFile = "AAA-Spread.csv"   // NEEDED
+//$RangeMth = 7        // Performance EndCol - StartCol
+//$Top10    = 7        // Short-10.csv  Long = 10     // Buy if Rank <= 10
+//csvFile   = "AAA-Spread.csv"   // NEEDED
 
 a2DTest  = ["",""]
 
@@ -31,10 +31,11 @@ bList    = [""]   // Buy Price
 gList    = [""]   // Gain %percent 
 mList    = [""]   // Montly gain 
 cList    = [""]   // Compoud Gain 
+hList    = [""]   // History Ret 
 
-aSumTotal = ["",""]   // Nbr 1-120,  QQQ, TOT 
+aSumTotal = ["","",""]   // Nbr 1-120,  QQQ, TOT 
 
-aDateRead = [""]      // aTimpStamp to Human Readable 
+aDateRead = []      // aTimpStamp to Human Readable 
 
 # ------------------------------------
 
@@ -49,14 +50,13 @@ DebugGlist = 0    //  gain
 DebugMlist = 0    //  montly performance 
 DebugClist = 0    //  compound 
 
+
 DebugSClist = 0    // Summary Stock compounded        Compount for Row-last  mList
-DebugTClist = 1    // Summart Total compounded vs QQQ Compound Gain Percent  cList
+DebugTClist = 0    // Summart Total compounded vs QQQ Compound Gain Percent  cList
 
 DebugS10List = 1   // Show $Top10 Current
 DebugGDList  = 0   // Printout Buys Sell Gain
-
-// ["DebugOutput","Array-Data", "Performance", "Sort", "Sort-Name","Rank","Buy-Price","Gain",
-//	"Monthly-Perf","Compound","Summary-Stock","Summary-Total","Show-Top10","Gain-Details"]
+DebugHRList  = 0   // History returm
 
 
 // ================================================
@@ -65,6 +65,9 @@ DebugGDList  = 0   // Printout Buys Sell Gain
   
 Func YearlyReturns()
 
+
+    StockCount    = 1   // Restore so Stk-Next starts at 1 again
+	
     // --- TOGGLE Debug the Array Outputs - TOGGLE Settings 0-> 1 or 1->0 ---
 
     DebugValue = comboDebugSet.currentText()
@@ -81,26 +84,28 @@ Func YearlyReturns()
 	if DebugValue = "Summary-Total"   if DebugTClist  = 1   DebugTClist  = 0  else  DebugTClist  = 1 ok  ok
 	if DebugValue = "Show-Top10"      if DebugS10List = 1   DebugS10List = 0  else  DebugS10List = 1 ok  ok
 	if DebugValue = "Gain-Details"    if DebugGDList  = 1   DebugGDList  = 0  else  DebugGDList  = 1 ok  ok
+	if DebugValue = "HistoryRet"      if DebugHRList  = 1   DebugHRList  = 0  else  DebugHRList  = 1 ok  ok
 	
-	See nl+"<===== DEBUG SETTING =====> "+nl
-	See "Array-Data   "+  DebugAlist   +nl
-	See "Performance  "+  DebugPlist   +nl
-	See "Sort         "+  DebugSlist   +nl     
-	See "Sort-Name    "+  DebugNlist   +nl
-	See "Rank         "+  DebugRlist   +nl     
-	See "Buy-Price    "+  DebugBlist   +nl
-	See "Gain         "+  DebugGlist   +nl     
-	See "Monthly-Perf "+  DebugMlist   +nl
-	See "Compound     "+  DebugClist   +nl 
-	See "Summary-Stock"+  DebugSClist  +nl
-	See "Summary-Total"+  DebugTClist  +nl
-	See "Show-Top10   "+  DebugS10List +nl
-	See "Gain-Details "+  DebugGDList  +nl
-	See "<===== End Debug Setting =====> "+nl+nl
+	// See nl+"<===== DEBUG SETTING =====> "+nl
+	// See "Array-Data   "+  DebugAlist   +nl
+	// See "Performance  "+  DebugPlist   +nl
+	// See "Sort         "+  DebugSlist   +nl     
+	// See "Sort-Name    "+  DebugNlist   +nl
+	// See "Rank         "+  DebugRlist   +nl     
+	// See "Buy-Price    "+  DebugBlist   +nl
+	// See "Gain         "+  DebugGlist   +nl     
+	// See "Monthly-Perf "+  DebugMlist   +nl
+	// See "Compound     "+  DebugClist   +nl 
+	// See "Summary-Stock"+  DebugSClist  +nl
+	// See "Summary-Total"+  DebugTClist  +nl
+	// See "Show-Top10   "+  DebugS10List +nl
+	// See "Gain-Details "+  DebugGDList  +nl
+    // See "HistoryRet   "+  DebugHRList  +nl
+	// See "<===== End Debug Setting =====> "+nl+nl
 	
 
     //--- Reapeat from GetHistory
-    cInterval = comboInterval.currentText()
+    cInterval   = comboInterval.currentText()
     cRange      = comboRange.currentText()
 	cTopTen     = comboTopTen.currentText()
     cFile       = txtTickerFile.text()
@@ -135,18 +140,18 @@ See "cInterval: "+ cInterval +" cRange: "+ cRange  +" cFile: "+ cFile +nl
         SummaryTotal()      // Total $Top10 Compounded vs QQQ
         ShowTop10()         // Show last $Top10 Symbols
 		
-		// aSumTotal Row 1 Nbr  2 QQQ 3 Tot
+		// aSumTotal: Row-1 =Nbr |  Row-2 =QQQ | Row-3 =Tot |
 		
 		
-		Del(aSumTotal[1], len(aSumTotal[1]) )
-		Del(aSumTotal[1],1)
+		Del(aSumTotal[1], len(aSumTotal[1]) )    // Remove last price 0 ?
+		Del(aSumTotal[1],1)                      // Remove 1st Numbers 1..60
 
-		Del(aSumTotal[2], len(aSumTotal[2]) )
-		Del(aSumTotal[2],1)
+		Del(aSumTotal[2], len(aSumTotal[2]) )    // Remove last price 0 ?
+		Del(aSumTotal[2],1)                      // Remove Name:  QQQ 1..60
 
-		Del(aSumTotal[3], len(aSumTotal[3]) )
-		Del(aSumTotal[3],1)		
-		
+ 		Del(aSumTotal[3], len(aSumTotal[3]) )    // Remove last price 0 ?
+		Del(aSumTotal[3],1)		                 // Remove Name:  TOT or performance 1..60
+		Del(aSumTotal[3], len(aSumTotal[3]) )    // Shift right 1 to align with QQQ  and TOTon Chart
 		
 		oChartWidget.setData(aSumTotal)  // Use Azzeddine Chart
 
@@ -173,7 +178,7 @@ Func ReadCSVFile()
 	DataLength = len(aList[1])            // Cols
 	See "DataLength: "+ DataLength +nl
 	
-	for i = 1 to len(alist)   // Rows
+	for i = 1 to len(alist)               // Rows
 	    if len(aList[i]) < DataLength
 		
 		    HowMuch = DataLength - len(aList[i])
@@ -213,21 +218,37 @@ ok
 Return
 
 // =================================== 
+// =================================== 
 
 Func DebugArray(arrayList)
 
-  //See "<----- Debug ----->"+nl
+    nRow = 0  
+	nCol = 0  
+    nRow = len(arrayList)  
+
+    if ! islist(arraylist[1])                  // 2D has nCol
+        See "1D: "+ nRow +"x"+ nCol +nl  
+            for i = 1 to nRow                  // 1D has No Col
+                See ""+ arrayList[i] +" "  
+            next
+        Return  
+    ok
+       
+    nCol = len(arraylist[1])  
+    See "2D: "+ nRow +"x"+ nCol +nl  
     for subList in arrayList
        for i = 1 to len(subList)
-           See "" + subList[i] +" "   // DO NOT use +tab messes up
+           See ""+ subList[i] +" "  
        next
        See nl
-    next
-    
-Return  
+    next  
+Return 
 
-// =================================== 
+// =================================
+// ================================================
 // Global: $RangeMth = 12  Use pList
+// MMC 207.13	211.16	null	null	null
+
 
 Func CalcPerformance()
 
@@ -236,6 +257,13 @@ Func CalcPerformance()
     k = 1
     for Row in aList                              // Row array data 
 
+	
+###	See "Row[1] "+ Row[1] +nl
+	    if subStr( Row[1], "Date" )
+	        See "CalcPerf Row[1]: " + Row[1] +nl
+		
+	    else
+
         for i = $RangeMth +2 to len(Row)
             
                 if Row[i -$RangeMth] = 0
@@ -243,13 +271,23 @@ Func CalcPerformance()
                    See "aList: k: "+ k +" i: "+ i +nl
                 ok
 				
-            Perf        = Row[i] / Row[i -$RangeMth]  // EndCol / StartCol
-            pList[k][i] = Perf
+			//------------------------------------------
+			// FIX " null" in price detected from Yahoo
+			
+			if Row[i] = " null" OR  Row[i -$RangeMth] = " null"
+			    Perf = 1
+				//See "Row[i]: "+ i +" "+ Row[1] +" BAD Data: |"+ Row[i] +"|"+ nl
+		    else
+			
+                Perf        = Row[i] / Row[i -$RangeMth]  // EndCol div StartC 			
+                pList[k][i] = (Perf)                      // *** test result
             
-            //See " |"+i +" End: "+ Row[i] +" Srt: "+ Row[i -$RangeMth] +" Perf: "+ Perf +nl 
+                //See "Row: "+ Row[1] +" "+i +" End: "+ Row[i] +" Srt: "+ Row[i -$RangeMth] +" Perf: "+ Perf +nl 
+			ok	
 
         next
         k++
+        ok		
 
     next
     
@@ -269,7 +307,7 @@ Func SortPerformance()
 
     nList  = tList   // Name List sorted by Rank
     
-    for nCol = $RangeMth +2 to len(pList[1])         // Performance List
+    for nCol = $RangeMth +2 to len(pList[1])     // Performance List
         sList = Reverse( Sort(pList, nCol) )     // High to Low Sort List
         
         
@@ -281,7 +319,7 @@ Func SortPerformance()
             
             for subList in sList
                 //See ""+ subList[1] +tab+ subList[nCol] +"   "  
-                nList[k][1] = aList[k][1]                     // Name in Col-1
+                nList[k][1]    = aList[k][1]                  // Name in Col-1
                 nList[k][nCol] = subList[1]                   // Sorted Name in Rest of Cols
                 
                 //See "nList: k: "+ k +" nCol: "+ nCol +" "+ nList[k][nCol] +nl
@@ -462,7 +500,7 @@ Func MonthlyGain()
         next
             if countEntry = 0  countEntry = 1  ok
             if sumRow = 1      sumRow = 0      ok
-            mList[nRow][nCol] = sumRow         
+            mList[nRow][nCol] = sumRow            
     next
 
 
@@ -506,6 +544,7 @@ ok
        
 Return
 
+// ===============================================
 // ================================================ 
 // cList = Compoud gains by Periods by Col and Row
 //         Col = Period All Stocks, Row = by One Stock
@@ -570,6 +609,7 @@ ok
 Return
 
 
+// ================================================
 // ================================================  
 // Summary Stock compounded        Compount for Row-last  mList
 
@@ -599,23 +639,38 @@ Func SummaryStock()
 
 Return
 
+
+// ================================================
 // ================================================ 
 // Show Last $Top10 for last 10 Periods nList
 
+
 Func ShowTop10() 
 
-    nRow = len(nList)        // 10
+    nRow = len(nList)        // 62
     nCol = len(nList[1])     // 122
+	
+	// $Top10 = Rows = 10
+	// $Top10 = Cols = 10
+	// nCol-9 to nCol
+	
+	$TopColWidth = 13                         // Cols in $Top10 RxC = 10x10
+	$TopColStart = nCol - $TopColWidth +1
     
-    //See "nList nRow: "+ nRow +" nCol: "+ nCol +nl 
-    //aShowTop10 = list(nRow,10)
        
-    aShowTop10 = list($Top10,10)   // Week Stocks
+	//--- 2 More Rows for QQQ and SPY reference -------
+    //See "$Top10 rows: "+ $Top10 +nl
+	
+    aShowTop10 = List($Top10, $TopColWidth)   // Rows x Cols MAKE LIST SIZE Row=NbrStocks  Col=Cells
     
-    k =1 m =1
-    for v = 1 to $Top10                   // 10   Rows
-        for h = nCol-9 to nCol           // 10-1 Cols                
-            aShowTop10[k][m] = nList[v][h] +tab
+	//--- COPY Last 10 entried from Name nList -------------
+	//--- LAST Entry is Today, 2nd Last is Start of Month
+	
+    k =1 m =1                                // Small Array Cells
+    for v = 1 to $Top10                      // k= Rows in Small Array Rows
+        for h = $TopColStart to nCol         // m= Cols in Small Array Rows 
+		
+            aShowTop10[k][m] = nList[v][h]   // 
 		
             m++
         next
@@ -623,12 +678,138 @@ Func ShowTop10()
         m =1   // Reset
     next
 	
+//See "$Top10: k:"+k +" m:"+m +" v:"+v +" h:"+h +nl	
+//DebugArray(aShowTop10)
+	
 
 	
-cellNbr  = len(aSumTotal[3]) -1
-$maxQQQ  = aSumTotal[2][cellNbr]
-$maxTOT  = (aSumTotal[3][cellNbr])
-$Ratio   = ($maxTot -1)  / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
+	//---------------------------------------------------------------
+	// Buy Prices for Top10 in 2nd Last nCol = Prev Month
+	// NOTE: If Symbol was Not Bought Prev Month -- Use aList Prices shows 0
+	//       USE aList to get price no matter what
+	// Use 2nd LAST  sCols=last	|| Except 01/mm/yyyy aTimeStamp
+	 
+	sRows = len(aShowTop10)
+	sCols = len(aShowTop10[1])
+	bRows = len(bList)
+	bCols = len(bList[1])
+
+	cRows = len(aClosedPrices)
+	cCols = len(aClosedPrices[1])	
+	
+	alastDate = split(lastDate,"/")     // 15/03/2026 global
+	See "aLastDate: "+ alastDate[3] +"-"+ alastDate[2] +"-"+ alastDate[1] +"  "+ Time() +nl
+
+	See "Sym:      PreMOp:   CurMOp:   NowCl:    $ChgNow:   Pct%     Shares" +nl
+	txtLog.append(" ")+tab+
+	txtLog.append("Sym:" +tab+ "CurMOp:" +tab+ "NowCl:" +tab+ "ChgNow:" +tab+ "Pct%")
+	
+	AvgSum     = 1
+	TotalValue = 0  // Shares * CurPrice
+	AvgValue   = 1  // Avg Stock Value
+	
+	for s = 1 to sRows                          // Each Symbol
+	
+	    itemName =  aShowTop10[s][sCols-1]      // Use 2nd LAST  sCols=last	|| Except 01/mm/yyyy aTimeStamp
+		
+		if alastDate[1] = "01"
+		   itemName =  aShowTop10[s][sCols-1]
+		ok
+		  
+		
+        posA     =  FIND( aList, itemName, 1)           // aList         Search Col-1
+		posC     =  FIND( aClosedPrices, itemName, 1)   // aClosedPrices Search    
+		
+		if posA = 0 OR posC = 0
+		   See "FIND(): "+ itemName +" NOT Found: PosA= "+ posA +" PosC= "+ posC  +nl
+		   
+		else
+		    //---Chg since start of 01-Month -----------------------
+            //--- Use Current AdjClose Price from aClosedPrices ----------
+		   
+		    ChgPr1    = aClosedPrices[posC][cCols] - aList[posA][bCols-1]    
+		    ChgPct1   = aClosedPrices[posC][cCols] / aList[posA][bCols-1] * 100 -100
+		    NowPrice  = aClosedPrices[posC][cCols]
+		    NbrShares = ceil( $Dollars / aList[posA][bCols-1] )   // $10,000 investment
+		   
+		   	TotalValue += NbrShares * NowPrice 
+            AvgValue    = TotalValue / sRows			
+		    AvgSum     += ChgPct1 
+			
+		   
+            See ""+ PadR( 7, itemName)             +" "    // itemName in bList BuyList
+		    See ""+ PadL( 9, aList[posA][bCols-2]) +" "    // PrevMonth
+			See ""+ PadL( 9, aList[posA][bCols-1]) +" "    // CurMonth
+			See ""+ PadL( 9, NowPrice)             +" "    // Now Price				   				   
+			See ""+ PadL( 9, ChgPr1)               +" "    // Change Price
+			See ""+ PadL( 9, ChgPct1)              +" "    // Pct%		
+			See "  ("+ PadL( 4,NbrShares) +")"     +nl     // Nbr Shares
+					
+			txtLog.append(itemName +tab+ aList[posA][bCols-1] +tab+ NowPrice +tab+ ChgPr1 +tab+ ChgPct1)
+					
+	    ok
+	next
+	
+	See nl+"TotalValue: "+ TotalValue +" AvgValue: "+ AvgValue +" AvgPct: "+ (AvgSum / sRows) +nl
+	
+	AvgValue = AvgSum / sRows
+	See nl+"Average Result: NbrStock: "+ sRows +" AvgValue:  "+ AvgValue +nl
+	
+	txtLog.append(" ")
+	txtLog.append("AVG Pct:" +tab+ AvgValue)
+	
+	// -----------------------------------------
+	// -----------------------------------------
+	    itemName = "QQQ"
+        pos      =  FIND( aList, itemName, 1)   // aList Search Col-1, Pos = Row Nbr 
+		
+		if pos = 0 
+		   See "FIND(): "+ itemName +" NOT Found: "+ " Pos= "+ pos +nl
+		   
+		else
+		   ChgPr1  = aList[pos][bCols] - aList[pos][bCols-1]        // Chg since start of 01-Month
+		   ChgPct1 = aList[pos][bCols] / aList[pos][bCols-1] * 100 -100		   
+		   
+           See ""+ itemName +tab+ 
+		           aList[pos][bCols-2] +tab+    // bList
+				   aList[pos][bCols-1] +tab+ 
+				   aList[pos][bCols]   +tab+ 
+				   ChgPr1  +tab+ 
+				   ChgPct1 +nl
+				   
+				   txtLog.append("QQQ Pct:" +tab+ ChgPct1)
+	    ok
+
+	// -----------------------------------------
+	// -----------------------------------------
+	
+	    itemName = "SPY"
+        pos      =  FIND( aList, itemName, 1)   // aList Search Col-1, Pos = Row Nbr 
+		
+		if pos = 0 
+		   See "FIND(): "+ itemName +" NOT Found: "+ " Pos= "+ pos +nl
+		   
+		else
+		   ChgPr1  = aList[pos][bCols] - aList[pos][bCols-1]        // Chg since start of 01-Month
+		   ChgPct1 = aList[pos][bCols] / aList[pos][bCols-1] * 100 -100		   
+		   
+           See ""+ itemName +tab+ 
+		           aList[pos][bCols-2] +tab+    // bList
+				   aList[pos][bCols-1] +tab+ 
+				   aList[pos][bCols]   +tab+ 
+				   ChgPr1  +tab+ 
+				   ChgPct1 +nl
+				   
+				   txtLog.append("SPY Pct:" +tab+ ChgPct1)
+	    ok		
+
+	//--------------------------------------
+	
+	
+cellNbr  = len(aSumTotal[3]) -1         //  FIX -1
+$maxQQQ  =     aSumTotal[2][cellNbr]
+$maxTOT  =     aSumTotal[3][cellNbr]
+$Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
 
 	    // ---------------------------------
 	    // EpochSecs  = aTimeStamp[len(aTimeStamp)]
@@ -638,20 +819,25 @@ $Ratio   = ($maxTot -1)  / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
         //---------------------------------
 		// Add Dates for Cols | 
 		
+		aDateRead = []
+		
 		if len(aTimeStamp) > 10
 		
 		    R = len(aTimeStamp)
-		    for S = 1 to 10	
-		        EpochTime  = aTimeStamp[ R -10 +S ]      //  160 159 158 ...
-		    	DateHuman  = EpochToDate(EpochTime)
+		    for S = 1 to  sCols                               // 10 nbr col in aShowTop10	
+		        EpochTime  = aTimeStamp[ R -sCols +S ]        // -10 +S ]      // 160 159 158 ...
+		    	DateHuman  = EpochToDate(EpochTime)      // 19/07/2025
 		    	
-                Add (aDateRead , DateHuman)
+				dateDDMM   =  subStr(DateHuman, 1, 6)    // str,pos,count
+				
+                Add (aDateRead , dateDDMM)               // DateHuman)
 		    next
 		else
+		    //------------------------------------------
 		    // Fake the Dates, GetQuotes was Not Run
 
-            aDateRead = ["01/03/2025","01/04/2025","01/05/2025","01/06/2025","01/07/2025",
-	                     "01/08/2025","01/09/2025","01/10/2025","01/11/2025","01/12/2025"]		
+            //aDateRead = ["01/03/","01/04/","01/05/","01/06/","01/07/",
+	        //             "01/08/","01/09/","01/10/","01/11/","01/12/","    Today"]		
 		ok	
 
         //---------------
@@ -660,37 +846,247 @@ $Ratio   = ($maxTot -1)  / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
     if DebugS10List = 1   
         See nl+"<----- Show $Top10 Vertical: Old to New  ----->"+nl
 		
-		See aDateRead[1]+" "+aDateRead[2]+" "+aDateRead[3]+" "+aDateRead[4]+" "+aDateRead[5]+" "+
-		    aDateRead[6]+" "+aDateRead[7]+" "+aDateRead[8]+" "+aDateRead[9]+" "+aDateRead[10] +nl
-			
-		See "10"+tab+"9"+tab+"8"+tab+"7"+tab+"6"+tab+"5"+tab+"4"+tab+"3"+tab+"2"+tab+"1"+ +nl
+	
+	    //--- Dates 01/MM ----------------
+		for d = 1 to len(aDateRead) - 1          
+		    See ""+aDateRead[d] +"  "
+		next
+		See Date() +nl
 		
-        DebugArray(aShowTop10)
+	
+	    //--- Nbrs 12 11 .. 2 1 ------------
+		for d = len(aDateRead) - 1 to 1 step -1  
+		    See ""+d +tab
+		next
+		See "Today" +nl		
+		
+		
+		//-----------------------------------------
+        // --- SYMBOLS -- DebugArray(aShowTop10) 
+		
+        for subList in aShowTop10          // Vert
+            for i = 1 to len(subList)      // Horz
+               See "" + subList[i] +tab    // DO NOT Call DebugArray(), Insert TAB
+            next
+            See nl
+        next	
+		
     ok
 	
+	//---------------------------
+	// Months 01/MM Append
 	
 	txtLog.append(" " )
 	txtLog.append("<===== TopTen >>> OLD >>> NEW Periods =====>" )
 	
-	txtLog.append(aDateRead[6]+"        "+ aDateRead[7]+"       "+ aDateRead[8]+"       "+
-  	              aDateRead[9]+"      "+ aDateRead[10] )
-		
-		
-    for v = 1 to $Top10                   // 10   Rows                
-			
-		txtLog.append(aShowTop10[v][6]+ aShowTop10[v][7]+ aShowTop10[v][8]+ aShowTop10[v][9]+ aShowTop10[v][10] )
-				
-    next
+	    monthInfo = ""
+		for d = (len(aDateRead) - 4) to (len(aDateRead) - 1)          // Dates 01/MM
+		    monthInfo += aDateRead[d] +tab
+		next
+		    monthInfo += Date() 
+	    txtLog.append(monthInfo)
+
+
+    //------------------------------
+	// Symbols matrix Append
+
+    for v = 1 to $Top10 
+	
+        symInfo = ""
+		for d = (len(aShowTop10[1]) - 4) to (len(aShowTop10[1]) - 0)         
+		    symInfo += aShowTop10[v][d] +tab
+		next
+	    txtLog.append(symInfo)	
+
+	next
+	
+	//-------------------------------
 
 	txtLog.append(" " )	
 	txtLog.append( "QQQ: "+ $maxQQQ +" TOT: "+ $maxTOT +" Ratio: "+ $Ratio )
 	txtLog.append(">===== TopTen =====<" )	
 
-		
-	//App.processEvents() # Keep UI responsive
+	
+	//=================================
+	// Debug HISTORY MONTHLY RESULTS
+	
+    if DebugHRList  = 1	
+		CalcMonthlyRet(aShowTop10)
+	ok
+	
+	//---------------------------------
 
 Return
 
+//=================================================
+// CALC RETURNS PER MONTH 
+//
+// TOP TEN - HORZ and VERT Tickers
+// if DebugGDList  = 1   ===>>>      // History Buy Sell Percent Average
+
+
+Func CalcMonthlyRet(aShowTop10)
+
+    //See nl+nl+"History Tickers Buy Sell Profit:"+nl+nl
+
+	
+	nRow  = len(aShowTop10)                    // 10                   
+	nCol  = len(aShowTop10[1])                 // 10		
+	month = len(aList[1]) - nCol               // 64 -10 = 54  <<<===
+     
+	aPercent   = list(nRow,nCol)                    // Nbr of Cols
+	sumPercent = 0
+	
+        for Horz = 1 to nCol -1 
+		    See nl+"<----- Month " + month +" ----->"+nl
+			
+			SumPercent = 0.01           // all stocks this month, to find average
+			DrawUp     = 0.01
+			DrawDown   = 0.01
+			
+            for Vert = 1 to nRow  
+			
+		        Ticker =  aShowTop10[Vert][Horz]
+						   
+		        # ---------------------------------------------------
+		        # Last 10 Months -- Get Prices for Start End Month - Gain and Percent
+		   			       
+		   		posRow   =  FIND( aList, Ticker, 1)        // Search Ticker -- Find Row with data prices
+			  
+			  
+			    if posRow > 0            // Must be a Ticket and not a "0" for 7 out of 12 montds
+		            PriceS   =  PadL(8, aList[posRow][month ] 	)   
+		            PriceE   =  PadL(8, aList[posRow][month +1] )
+				    Diff     =  PadL(8, PriceE - PriceS                 )
+				    Percent  =  PadL(8, PriceE / PriceS * 100 -100      )
+				    
+                    SumPercent += Percent
+				    if Percent > DrawUp    DrawUp   = Percent  ok
+				    if Percent < DrawDown  Drawdown = Percent  ok
+				    
+				    //if DebugHList = 1			   
+		                See ""+ Horz +"-"+ Vert +" "+ PadR(6,Ticker) +" "+ PriceS +" "+ PriceE +" " +" "+ Diff + Percent  +nl
+				    //ok 
+				     
+				    aPercent[Vert][Horz] = Percent
+				ok	
+				
+		    # --------------------------------
+            next
+			
+			AvgPercent = SumPercent / nRow
+			See "Month: "+ month +" AvgPct: "+ AvgPercent +" DrawUp: "+ DrawUp +" DrawDown: "+ DrawDown +nl
+							
+		    month++
+            
+        next
+
+        See nl
+        DebugArray(aPercent)     // 2D Matrix of Percent for Month for TopTen Stocks
+		
+		//-------------------------------------------
+		// Multiple Months Return 2D: 10x13
+		
+		aSum    = List(nCol)        // <== Create Horz list for AvgPct for each Month
+		aDrawUp = List(nCol)
+		aDrawDn = List(nCol)
+		
+		for Horz = 1 to nCol
+		    Sum    = 0.01
+			DrawUp = 0.01
+			DrawDn = 0.01
+			
+            for Vert = 1 to nRow
+				Sum += aPercent[Vert][Horz]
+				  if aPercent[Vert][Horz] > DrawUp  DrawUp = aPercent[Vert][Horz]  ok
+				  if aPercent[Vert][Horz] < DrawDn  DrawDn = aPercent[Vert][Horz]  ok
+            next
+			
+			AvgSum     = Sum / nRow
+			
+			aSum[Horz]    = AvgSum   // Horz list of Sum per Month
+			aDrawUp[Horz] = DrawUp    
+			aDrawDn[Horz] = DrawDn
+		next
+		
+		See nl		
+        //DebugArray(aSum)          // 1D of Avg Perecent by Month
+		//DebugArray(aDrawUp)
+		//DebugArray(aDrawDown)
+		
+		//------------------
+		See "AvgPct: "
+		for i = 1 to nCol
+		   See PadR(9,aSum[i]) 
+		next
+		   See nl
+		
+		
+		// See "DrawUp: "
+		// for i = 1 to nCol
+		//    See PadR(9,aDrawUp[i]) 
+		// next
+		//    See nl
+		// 
+		// See "DrawDn: "
+		// for i = 1 to nCol
+		//    See PadR(9,aDrawDn[i]) 
+		// next		
+		//    See nl
+		//---------------
+		
+		TotalSum = 0.01
+		for i = 1 to len(aSum)
+		    TotalSum += aSum[i]		
+		next
+		See nl+"Total Sum.: "+ TotalSum +nl
+		
+		//--------------------------------		
+		DrawUpMth = Max(aSum)
+		DrawDnMth = Min(aSum)
+		
+		See "DrawUpMth.: "+ DrawUpMth +nl 
+		See "DrawDnMth.: "+ DrawDnMth +nl
+		
+		//--------------------------------
+
+		Compound = 1
+		for i = 1 to nCol -1                      // Last Col = 0		
+		    nbr = (aSum[i] + 100 ) / 100          // 10.79 => 110.79 => 1.1079						
+		    Compound *= nbr	                     			
+		next		
+		Compound = (Compound -1 ) *100
+		See "Final Cmp.: "+ Compound +nl
+		
+		//--------------------------------------
+	    // Find SPY Results for same Time period	
+
+        itemName = "SPY"
+        pos      =  FIND( aList, itemName, 1)   // aList Search Col-1, Pos = Row Nbr 
+		
+        if pos = 0
+            See "SPY pos Not Found"+ nl
+        Ok
+		
+		
+		lenSPY = len( aList[pos] )
+		oldSPY = aList[pos][ lenSPY - nCol +1]       // 9 ]  nCols ago
+		newSPY = aList[pos][ lenSPY ]
+		chgSPY = newSpy - OldSPY
+		perSPY = newSpy / OldSpy * 100 - 100
+		
+
+		See "..SPY Pct.: "+ perSpy  +nl //  +" Old: "+ oldSpy +" New: "+ newSPY +" Chg: "+ chgSPY  +nl
+		
+		
+	    
+
+Return
+
+// ================================================
+// ================================================  
+
+// ================================================
 // ================================================  
 // Summary Total compounded vs QQQ Compound Gain Percent  cList
 
@@ -701,7 +1097,7 @@ Func SummaryTotal
     nRow = len(cList)                            // cList = Compound
     nCol = len(cList[1])    
     
-    aSumTotal = list(3, len(cList[1]) )          // Compare QQQ::TOT each period
+    aSumTotal       = list(3, len(cList[1]) )    // CREATE List 3 x NbrStocks -- Nbr::QQQ::TOT each period
     aSumTotal[1][1] = 1                           
     aSumTotal[2][1] = "QQQ"
     aSumTotal[3][1] = "TOT"
@@ -714,7 +1110,7 @@ Func SummaryTotal
 	
     //See "QInit: "+ QInit +nl
 
-    for k = $RangeMth+ 2 to nCol-1 
+    for k = $RangeMth+ 2 to nCol -1    // FIX  -1 
         QChg = aList[1][k] / QInit               // QQQ  row 1      
         TCmp = cList[nRow][k]                    // TOT  row last
                 
@@ -736,6 +1132,47 @@ Return
 
 
 // ================================================
+// PADL() = Pad Left -- Add spaces on Left Side
+
+Func PadL( padn, item )         
+
+    padn     = 0+  Padn        // to number
+    item     = ""+ item        // to string   
+    lenItem  = len(item)          
+    fillNbr  = padn - lenItem       
+    if fillNbr <= 0 
+       See nl+"Err: PadL Nbr <=0: "+ fillnbr +nl
+	   return item
+    ok
+  
+    newItem  = Space(fillNbr) + item
+
+Return newItem
+
+
+// ================================================
+// PADR() = Pad Right -- Add spaces on Right Side
+
+Func PadR( padn, item )         
+
+    padn     = 0+  Padn         // to number
+    item     = ""+ item         // to string   
+    lenItem  = len(item)          
+    fillNbr  = padn - lenItem    
+	
+    if fillNbr <= 0 
+       See nl+"Err PadR Nbr <=0: "+ fillnbr +nl
+	   return item
+    ok
+  
+    newItem  = item + Space(fillNbr) 
+
+Return newItem
+
+// ================================================
+
+
+// ================================================
 // ================================================
 // ================================================
 //
@@ -750,8 +1187,8 @@ Return
 Func DrawChartQT(aSumTotal)		
 
 cellNbr  = len(aSumTotal[3]) -1
-$maxQQQ  = aSumTotal[2][cellNbr]
-$maxTOT  = (aSumTotal[3][cellNbr]) * 1.50  // Vertical Bigger by 10%
+$maxQQQ  =     aSumTotal[2][cellNbr]
+$maxTOT  =    (aSumTotal[3][cellNbr]) * 1.50  // Vertical Bigger by 10%
 $realTot = ($maxTOT * 10 / 15.0 )
 $nameTot = "TOT:"+ $realTot 
 

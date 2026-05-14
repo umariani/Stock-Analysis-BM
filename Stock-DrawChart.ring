@@ -34,7 +34,7 @@ penMagenta  = new qpen() { setcolor(colorMagenta) setwidth(1) }
 penAqua     = new qpen() { setcolor(colorAqua)    setwidth(1) }
 penGrid     = new qpen() { setcolor(colorGrid)    setwidth(1) }
 penBack     = new qpen() { setcolor(colorBack)    setwidth(1) }
-penBlue1    = new qpen() { setcolor(colorBlue)   setwidth(1) }
+penBlue1    = new qpen() { setcolor(colorBlue1)   setwidth(1) }
 
 brushRed     = new qbrush() { setstyle(1)  setcolor (colorRed)}      
 brushGreen   = new qbrush() { setstyle(1)  setcolor (colorGreen)}    
@@ -60,26 +60,32 @@ brushEmpty   = new qbrush() { setstyle(0)  setcolor (colorYellow)}
 class StockChart from QLabel
     
     aPortfolioData = []
-    aQQQData = []
+    aQQQData       = []
     
-    func init(parent)
+	# ================================
+    Func init(parent)
         super.init(parent)
         return this
 
-    func setData(aSumTotal)
+	# ================================
+	# Array is 3 x 62  (26)
+	
+    Func setData(aSumTotal)
 	
 	    aNbr           = aSumTotal[1]
         aQQQData       = aSumTotal[2]
-		aPortfolioData = aSumTotal[3]
+		aPortfolioData = aSumTotal[3]		
 		
-        draw()
-        
-    func draw
-        # Capture dimensions and data locally to avoid scope issues inside QPainter block
+        Draw()  // ===>>> DRAW
+
+	# ================================        
+    Func Draw
+        #--- Capture dimensions and data locally to avoid scope issues inside QPainter block
         w = this.width()
         h = this.height()
-        aPort = aPortfolioData
+
         aQ    = aQQQData
+		aPort = aPortfolioData
         
         if w < 10 or h < 10 return ok
         
@@ -89,7 +95,7 @@ class StockChart from QLabel
             begin(p1)
             setRenderHint(QPainter_Antialiasing, true)
             
-            # Background
+            #--- Background
 			fillRect(0, 0, w, h, brushBack)
             
             if len(aPort) < 2
@@ -100,7 +106,7 @@ class StockChart from QLabel
 			    //--- Padding on Left and Right before Chart Grid
                 pad = 40      
                 
-                # Find Min/Max
+                #--- Find Min/Max
                 minVal =  1000
                 maxVal = -1000
                 
@@ -108,25 +114,25 @@ class StockChart from QLabel
                         if v < minVal minVal = v ok
                         if v > maxVal maxVal = v ok
                     next
-				    curAPort = aSumTotal[3][len(aSumTotal[3])]
+				    curAPort = aSumTotal[3][len(aSumTotal[3])]  // Current Price
 				
 		
                     for v in aQ 
                         if v < minVal minVal = v ok
                         if v > maxVal maxVal = v ok
                     next
-				    curAQQQ = aSumTotal[2][len(aSumTotal[2])]					
+				    curAQQQ   = aSumTotal[2][len(aSumTotal[2])]					
 					curARatio = (curAPort -1) / (curAQQQ -1)
 				
 				              
                 range = maxVal - minVal
                 if range = 0 range = 1 ok
                 
-                # Draw Grid (Detailed)
+                #-- Draw Grid (Detailed)
                 setPen(penGrid)
                 
-                # Horizontal lines
-                nSteps = 10                               // 12 nSteps
+                #--- Horizontal lines ====  Price
+                nSteps = 10                               // 12 
 				
 				value = maxVal / nSteps
                 for i = 0 to nSteps
@@ -141,27 +147,44 @@ class StockChart from QLabel
 					
                 next
                 
-                # Vertical lines
+                #--- Vertical lines |||  Time
+				setPen(penGrid)
+				nSteps =  DataLen                      // <<<=== QQQ=61
 				Offset =  DataLen % nSteps             // Mod = 4
 				Months = (DataLen - Offset) / nSteps   // 64 -4 /  12 = 5
 				
-                for i = 0 to nSteps                           
+				//See "Vert: Datalen: "+ Datalen +" nSteps: "+ nSteps +" Offset: "+ Offset +" Months: "+  Months +nl
+				
+                for i = 1 to nSteps  
+                    if i % 12 = 0                 // ####Year boundary - black line
+				        setPen(penBlack)
+				    ok
+					
                     x = pad + (i * (w - 2*pad) / nSteps)
                     drawLine(x, pad, x, h - pad)
 					
-					//---Put Month Numbers on Bottom ---
+					//--- Put MONTH NUMBERS on Bottom ---
+				    aDate = split(Date(), "/")
+					mDate = 0+ aDate[2]            // Month nbr 05
+					
+					MthName = ["J","F","M","A","M","J","J","A","S","O","N","D","Z"]
+					pos = (i +mDate -1 )% 12 +1 
+				
+					
 					setPen(penBlack)
-					drawText(x, y+10, ""+ (i * Months))    // Label 1-12
+					drawText(x, y+10, ""+ ((nSteps - i )* Months) )    // Reverse -Use -i = 60 54 48 .. 12 6 0
+					drawText(x, y+20, ""+ MthName[pos] )
+					
 					setPen(penGrid)
 					
                 next
 
-                # Draw Axes
+                #--- Draw Axes
                 setPen(penBlue1) 
                 drawLine(pad, pad,     pad,     h - pad)
                 drawLine(pad, h - pad, w - pad, h - pad)
                 
-                # Zero Line
+                #--- Zero Line
                 y1 = h - pad - (1.0 - minVal) * (h - 2*pad) / range
                 if y1 >= pad and y1 <= h - pad
                     setPen(penBlue1)  
@@ -171,9 +194,9 @@ class StockChart from QLabel
 					drawText( w/2 , y+30, "Months")
                 ok
                 
-                # Draw QQQ (Red)
+                #--- Draw QQQ (Red)
                 setPen(penRed)  
-                nCount = len(aQ)
+                nCount = len(aQ)          // Dont count Symbol
                 for i = 1 to nCount - 1
                     x1 = pad + (i - 1) * (w - 2*pad) / (nCount - 1)
                     y1 = h - pad - (aQ[i] - minVal) * (h - 2*pad) / range
@@ -184,9 +207,9 @@ class StockChart from QLabel
                     drawLine(x1, y1, x2, y2)
                 next
                 
-                # Draw Portfolio (Blue)
+                #--- Draw Portfolio or STOCK (Blue)
                 setPen(penBlue) 
-                nCount = len(aPort)
+                nCount = len(aPort)         // Dont count Symbol
                 for i = 1 to nCount - 1
                     x1 = pad + (i - 1) * (w - 2*pad) / (nCount - 1)
                     y1 = h - pad - (aPort[i] - minVal) * (h - 2*pad) / range
@@ -197,9 +220,12 @@ class StockChart from QLabel
                     drawLine(x1, y1, x2, y2)
                 next
                 
-                # Legend
+                #--- Legend Values in Top-Left -----------
+				curAPort2   = aSumTotal[3][len(aSumTotal[3]) -1 ]   // Previous Price
+				curAPercent = curAPort / curAPort2 * 100 -100       // Current
+				
                 setPen(penBlack)  
-                drawText(pad +10, 10, "--- Portfolio_____(Blue) "+ curAPort)
+                drawText(pad +10, 10, "--- Portfolio_____(Blue) "+"  "+ stockName +" "+ curAPort2 +" ==> "+ curAPort +"  "+ curAPercent +"%" )
                 drawText(pad +10, 30, "--- QQQ________(Red) "+ curAQQQ)
 				drawText(pad +10, 50, "--- Performance__Ratio "+ curARatio)
                 

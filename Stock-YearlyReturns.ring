@@ -19,6 +19,8 @@
 //$Top10    = 7        // Short-10.csv  Long = 10     // Buy if Rank <= 10
 //csvFile   = "AAA-Spread.csv"   // NEEDED
 
+$Algorithm = "Momentum (original)"    // Default Ranking Algorithm (overwritten by combo selection in YearlyReturns())
+
 a2DTest  = ["",""]
 
 tList    = [""]   // tList with Symbol in Col-1
@@ -33,9 +35,30 @@ mList    = [""]   // Montly gain
 cList    = [""]   // Compoud Gain 
 hList    = [""]   // History Ret 
 
-aSumTotal = ["","",""]   // Nbr 1-120,  QQQ, TOT 
+aSumTotal = ["","","",""]   // Nbr 1-120,  QQQ, TOT, SPY 
+$maxQQQ   = 0             // Final QQQ compounded value        -- set in ShowTop10()
+$maxSPY   = 0             // Final SPY compounded value        -- set in ShowTop10()
+$maxTOT   = 0             // Final Portfolio compounded value  -- set in ShowTop10()
+$Ratio    = 0             // Outperform multiple (TOT vs QQQ)  -- set in ShowTop10()
+$RatioSPY = 0             // Outperform multiple (TOT vs SPY)  -- set in ShowTop10()
+$CAGR     = 0             // Portfolio Annual CAGR      -- set in ComputePortfolioStats()
+$Sharpe   = 0             // Portfolio Sharpe Ratio     -- set in ComputePortfolioStats()
+$MaxDD    = 0             // Portfolio Max Drawdown     -- set in ComputePortfolioStats()
 
 aDateRead = []      // aTimpStamp to Human Readable 
+aCsvDateRow = null  // fix 2026-Aug-23: the "Date" row read back from AAA-Spread.csv,
+                    // used to rebuild lastDate / aDateRead when GetQuotes() did NOT
+                    // run this session (offline run using a saved CSV) -- see
+                    // SyncOfflineDateScaffold() and ShowTop10()
+
+# --- Weekly Stop-Sell hook: current month's Top-10 buy basket ---------
+# Populated at the end of ShowTop10() every run; consumed by
+# SyncWeeklyTop10Buys() in Stock-WeeklyStopSell.ring
+aTop10Symbols  = []      // Symbol for each of this month's Top-10 buys
+aTop10BuyPrice = []      // Buy price (month-open) for each symbol, same order
+aTop10BuyDate  = []      // "01/mm/yyyy" buy-month key, same order
+aTop10NowPrice = []      // Latest ("Now") price for each symbol, same order
+aTop10Shares   = []      // Nbr shares bought with $Dollars, same order
 
 # ------------------------------------
 
@@ -111,23 +134,26 @@ Func YearlyReturns()
     cFile       = txtTickerFile.text()
 	cInFileName = txtTickerFile.text()  // Picked File QuotesXXX.ini    
 	cRangeMth   = comboRangeMth.currentText()
+	cAlgorithm  = comboAlgorithm.currentText()   // Ranking Algorithm Dropdown
     
 		
-$Interval =    cInterval	// Curl GetQuotes
-$Range    =    cRange	    // Curl GetQuores
-$Top10    = 0+ cTopTen      // YearlyReturns
-$RangeMth = 0+ cRangeMth    // YearlyReturns  "$RangeMth" is Month Range | NOT $Range for Curl	
+    $Interval =    cInterval	// Curl GetQuotes
+    $Range    =    cRange	    // Curl GetQuores
+    $Top10    = 0+ cTopTen      // YearlyReturns
+    $RangeMth = 0+ cRangeMth    // YearlyReturns  "$RangeMth" is Month Range | NOT $Range for Curl	
+    $Algorithm=    cAlgorithm   // YearlyReturns  Which Ranking Algorithm to use in CalcPerformance()
 	
 
-See "$RangeMth: "+ $RangeMth +" $Top10: "+ $Top10 +" Quotes: "+ cInFileName  +nl
-See "cInterval: "+ cInterval +" cRange: "+ cRange  +" cFile: "+ cFile +nl
+    See "$RangeMth: "+ $RangeMth +" $Top10: "+ $Top10 +" Quotes: "+ cInFileName  +nl
+    See "cInterval: "+ cInterval +" cRange: "+ cRange  +" cFile: "+ cFile +" $Algorithm: "+ $Algorithm +nl
 
-//--- NOW READY TO GO ---------------------------
+    //--- NOW READY TO GO ---------------------------
 
-// for $RangeMth = 6 to 9
-//    for $Top10 =  6 to 10 
+    // for $RangeMth = 6 to 9
+    //    for $Top10 =  6 to 10 
 
         ReadCSVFile()       // aList = csvfile
+        SyncOfflineDateScaffold()  // fix: rebuild lastDate/date-labels from CSV when offline
         CreateLists()       // tList with Symbol
         CalcPerformance()   // pList
         SortPerformance()   // sList => nList Name
@@ -140,8 +166,9 @@ See "cInterval: "+ cInterval +" cRange: "+ cRange  +" cFile: "+ cFile +nl
         SummaryTotal()      // Total $Top10 Compounded vs QQQ
         ShowTop10()         // Show last $Top10 Symbols
 		
-		// aSumTotal: Row-1 =Nbr |  Row-2 =QQQ | Row-3 =Tot |
-		
+		// aSumTotal: Row-1 =Nbr |  Row-2 =QQQ | Row-3 =Tot | Row-4 =SPY |
+
+    //DebugArray(aSumTotal) ?" "		
 		
 		Del(aSumTotal[1], len(aSumTotal[1]) )    // Remove last price 0 ?
 		Del(aSumTotal[1],1)                      // Remove 1st Numbers 1..60
@@ -152,40 +179,54 @@ See "cInterval: "+ cInterval +" cRange: "+ cRange  +" cFile: "+ cFile +nl
  		Del(aSumTotal[3], len(aSumTotal[3]) )    // Remove last price 0 ?
 		Del(aSumTotal[3],1)		                 // Remove Name:  TOT or performance 1..60
 		Del(aSumTotal[3], len(aSumTotal[3]) )    // Shift right 1 to align with QQQ  and TOTon Chart
+		Insert(aSumTotal[3], $RangeMth+1, 1)
+
+		Del(aSumTotal[4], len(aSumTotal[4]) )    // Remove last price 0 ?
+		Del(aSumTotal[4],1)                      // Remove Name:  SPY 1..60
 		
 		oChartWidget.setData(aSumTotal)  // Use Azzeddine Chart
 
+     //DebugArray(aSumTotal) ?" "
   
         // DrawChartQT(aSumTotal)        // Use QT Chart 
 	
 	//---------------------------------
 	
        
-//     next
-//   See "<==========>"+nl
-// next
+    //     next
+    //   See "<==========>"+nl
+    // next
  
 
-// =================================================
-// =================================================
-// Use aList for CSV read in
+// =======================================================
+// =======================================================
+// Use aList for CSV read in  ( QQQ = DataLen from Main)
 
 Func ReadCSVFile()
 
     cFile = Read(csvFile)
+	
     aList = CSV2List( Read(csvfile) )     // Create 2D array
 	
 	DataLength = len(aList[1])            // Cols
-	See "DataLength: "+ DataLength +nl
+	See "Read csvFile: DataLength: "+ DataLength +nl
 	
 	for i = 1 to len(alist)               // Rows
 	    if len(aList[i]) < DataLength
 		
-		    HowMuch = DataLength - len(aList[i])
+		    HowMuch = DataLen - len(aList[i])   // DataLength
 		    for h = 1 to HowMuch
 		       Insert( aList[i], 2, aList[i][2] )   // Fill LEFT List Index Value ..Col		   
 		       //See "Insert: "+ h +" "+ aList[i][1] +" "+ aList[i][2] +" "+  aList[i][3] +" "+  aList[i][5]  +nl
 			next   
+		
+        else	
+		    if len(aList[i]) > DataLength
+		        SEE "ReadCSVFile: "+i +" Sym: "+ aList[i][1] +" DataLength: "+ len(aList[i]) +" QQQ-Datalen: "+ DataLen +nl
+				DEL( aList[i], 2)
+		   
+		    ok
+			
 	    ok
 	next
  
@@ -195,6 +236,37 @@ if DebugAList = 1
 ok  
     
     
+Return
+
+// =================================== 
+// fix 2026-Aug-23
+// When Get Quotes was run live this session, Stock-Analysis-BM.ring's
+// GetQuotes() sets the globals `lastDate` and `aTimeStamp` from the fresh
+// download, and ShowTop10() builds its date labels from `aTimeStamp`.
+//
+// When GetQuotes() could NOT run (no internet, falling back to a saved
+// AAA-Spread.csv / AAA-Spread.csv.bkp), neither global gets updated:
+// `lastDate` stays stuck at its hardcoded startup value ("01/02/2026") and
+// `aTimeStamp` stays empty. ShowTop10() then tries to index an empty
+// aDateRead array and crashes (Array Access - Index out of range).
+//
+// AAA-Spread.csv always carries its own "Date" row (written the last time
+// GetQuotes() succeeded), so we can rebuild everything ShowTop10() needs
+// from that row instead of requiring a live download.
+
+Func SyncOfflineDateScaffold()
+
+    aCsvDateRow = null
+    for Row in aList
+        if subStr( Row[1], "Date")
+            aCsvDateRow = Row
+        ok
+    next
+
+    if aCsvDateRow != null AND len(aTimeStamp) <= 10     // GetQuotes did NOT run live this session
+        lastDate = aCsvDateRow[ len(aCsvDateRow) ]        // most recent saved date, "dd/mm/yyyy"
+    ok
+
 Return
 
 // =================================== 
@@ -253,51 +325,411 @@ Return
 Func CalcPerformance()
 
     pList = tList  // Performance
-    
+
+    // --- Fix zero / " null" start-column prices across the whole aList first ---
+    // (Same safety-net the original Momentum calc used, now shared by all algorithms)
     k = 1
-    for Row in aList                              // Row array data 
-
-	
-###	See "Row[1] "+ Row[1] +nl
-	    if subStr( Row[1], "Date" )
-	        See "CalcPerf Row[1]: " + Row[1] +nl
-		
-	    else
-
-        for i = $RangeMth +2 to len(Row)
-            
+    for Row in aList
+        if not subStr( Row[1], "Date" )
+            for i = $RangeMth +2 to len(Row)
                 if Row[i -$RangeMth] = 0
                    Row[i -$RangeMth] = 1
                    See "aList: k: "+ k +" i: "+ i +nl
                 ok
-				
-			//------------------------------------------
-			// FIX " null" in price detected from Yahoo
-			
-			if Row[i] = " null" OR  Row[i -$RangeMth] = " null"
-			    Perf = 1
-				//See "Row[i]: "+ i +" "+ Row[1] +" BAD Data: |"+ Row[i] +"|"+ nl
-		    else
-			
-                Perf        = Row[i] / Row[i -$RangeMth]  // EndCol div StartC 			
-                pList[k][i] = (Perf)                      // *** test result
-            
-                //See "Row: "+ Row[1] +" "+i +" End: "+ Row[i] +" Srt: "+ Row[i -$RangeMth] +" Perf: "+ Perf +nl 
-			ok	
-
-        next
+            next
+        ok
         k++
-        ok		
-
     next
-    
-See nl  
+
+See nl+"CalcPerformance: Algorithm: "+ $Algorithm +nl
+
+    if $Algorithm = "Composite (blend)"
+        CalcPerformance_Composite()
+    else
+        //--- All other single-formula algorithms share this loop ---
+        k = 1
+        for Row in aList                              // Row array data
+
+###	    See "Row[1] "+ Row[1] +nl
+	        if subStr( Row[1], "Date" )
+	            See "CalcPerf Row[1]: " + Row[1] +nl
+
+	        else
+
+                for i = $RangeMth +2 to len(Row)
+
+                    Perf = ScoreByAlgorithm($Algorithm, Row, i)
+                    pList[k][i] = Perf
+
+                next
+            ok
+
+            k++
+        next
+    ok
+
+See nl
 
 if DebugpList = 1
-    See nl+"<----- Debug Performance pList: $RangeMth: "+ $RangeMth +" ----->"+nl
+    See nl+"<----- Debug Performance pList: $RangeMth: "+ $RangeMth +" Algorithm: "+ $Algorithm +" ----->"+nl
     DebugArray(pList)
-ok  
- 
+ok
+
+Return
+
+// ================================================
+// Dispatch a single stock/column score based on the selected Algorithm.
+// Row     = one stock's price row  (Row[1] = Symbol, Row[2..] = prices oldest->newest)
+// i       = current column index (End column)
+// Returns a numeric "score" — for Momentum-style algos this is a ratio (>1 = up),
+// for the others (MACD, Sharpe, MA-Cross) it is a signed score where higher = better.
+// Whichever score is returned, SortPerformance() ranks High-to-Low, so "higher = better"
+// must hold for every algorithm.
+
+Func ScoreByAlgorithm(cAlgo, Row, i)
+
+    if      cAlgo = "All-Pairs Momentum"
+        return ScoreAllPairs(Row, i)
+    elseif  cAlgo = "Avg Momentum (all months)"
+        return ScoreAvgMomentum(Row, i)
+    elseif  cAlgo = "Moving Average Cross"
+        return ScoreMA(Row, i)
+    elseif  cAlgo = "MACD"
+        return ScoreMACD(Row, i)
+    elseif  cAlgo = "Sharpe Momentum"
+        return ScoreSharpe(Row, i)
+    elseif  cAlgo = "Pullback from High"
+        return ScorePullback(Row, i)
+    else   // "Momentum (original)" and fallback default
+        return ScoreMomentum(Row, i)
+    ok
+
+Return 0
+
+// ================================================
+// Safe price lookup: treats missing columns, 0, and " null" (bad Yahoo data) as invalid (0)
+
+Func PriceAt(Row, col)
+
+    if col < 2  return 0  ok
+    if col > len(Row)  return 0  ok
+
+    v = Row[col]
+    if v = " null"  return 0  ok
+    if v = 0        return 0  ok
+
+Return v
+
+// ================================================
+// 1. Momentum (original):  price[now] / price[RangeMth ago]
+
+Func ScoreMomentum(Row, i)
+
+    R      = $RangeMth
+    pStart = PriceAt(Row, i - R)
+    pEnd   = PriceAt(Row, i)
+
+    if pStart = 0 or pEnd = 0  return 1  ok    // Same "Perf = 1" fallback as original
+
+Return pEnd / pStart
+
+// ================================================
+// 1b. Pullback from High:  Momentum (original) ratio, penalized by how far
+//     price[now] sits below its recent high over the same RangeMth window.
+//     base   = (price[now] / price[RangeMth ago]) - 1        (excess momentum, 0 = flat)
+//     penalty= 2 * [ (MaxHigh(last RangeMth) / price[now]) - 1 ]   (0 if at the high,
+//              doubled so pullbacks drag the score down twice as hard)
+//     score  = base - penalty
+//     MaxHigh = highest price seen across the window i-R .. i (inclusive of "now").
+
+Func ScorePullback(Row, i)
+
+    R      = $RangeMth
+    pStart = PriceAt(Row, i - R)
+    pEnd   = PriceAt(Row, i)
+
+    if pStart = 0 or pEnd = 0  return 1  ok    // Same "Perf = 1" fallback as original
+
+    maxHigh = 0
+    for k = 0 to R
+        pRef = PriceAt(Row, i - k)
+        if pRef > maxHigh
+            maxHigh = pRef
+        ok
+    next
+
+    if maxHigh = 0  return 1  ok
+
+    base    = (pEnd / pStart) - 1
+    penalty = 2 * ( (maxHigh / pEnd) - 1 )
+
+Return base - penalty
+
+// ================================================
+// 2. Avg Momentum (all months):  mean( price[now] / price[each prior month in window] )
+
+Func ScoreAvgMomentum(Row, i)
+
+    R    = $RangeMth
+    pEnd = PriceAt(Row, i)
+    if pEnd = 0  return 0  ok
+
+    total = 0
+    cnt   = 0
+    for k = 1 to R
+        pRef = PriceAt(Row, i - k)
+        if pRef != 0
+            total += (pEnd / pRef)
+            cnt++
+        ok
+    next
+
+    if cnt = 0  return 0  ok
+
+Return total / cnt
+
+// ================================================
+// 3. All-Pairs Momentum:  price[RangeMth ago] (baseline) vs every subsequent month, averaged
+
+Func ScoreAllPairs(Row, i)
+
+    R     = $RangeMth
+    pBase = PriceAt(Row, i - R)
+    if pBase = 0  return 0  ok
+
+    total = 0
+    cnt   = 0
+
+    for k = R -1 to 1 step -1
+        pRef = PriceAt(Row, i - k)
+        if pRef != 0
+            total += (pRef / pBase)
+            cnt++
+        ok
+    next
+
+    pEnd = PriceAt(Row, i)
+    if pEnd != 0
+        total += (pEnd / pBase)
+        cnt++
+    ok
+
+    if cnt = 0  return 0  ok
+
+Return total / cnt
+
+// ================================================
+// Helper: mean of a numeric list
+
+Func ListMean(aVals)
+
+    if len(aVals) = 0  return 0  ok
+    total = 0
+    for v in aVals  total += v  next
+
+Return total / len(aVals)
+
+// ================================================
+// Helper: population std-dev of a numeric list, given its mean
+
+Func ListStdDev(aVals, mu)
+
+    n = len(aVals)
+    if n < 2  return 0  ok
+
+    sumSq = 0
+    for v in aVals
+        sumSq += pow(v - mu, 2)
+    next
+
+Return sqrt(sumSq / n)
+
+// ================================================
+// Helper: Exponential Moving Average of a price window (oldest first)
+
+Func EMA(aVals, span)
+
+    if len(aVals) = 0  return 0  ok
+
+    alpha = 2.0 / (span + 1)
+    ema   = aVals[1]
+
+    for idx = 2 to len(aVals)
+        ema = alpha * aVals[idx] + (1 - alpha) * ema
+    next
+
+Return ema
+
+// ================================================
+// Helper: build a clean (non-zero) price window [startCol..i] from a Row
+
+Func PriceWindow(Row, startCol, i)
+
+    aWin = []
+    if startCol < 2  startCol = 2  ok
+
+    for c = startCol to i
+        v = PriceAt(Row, c)
+        if v != 0  aWin + v  ok
+    next
+
+Return aWin
+
+// ================================================
+// 4. MACD-inspired score:  fast EMA (RangeMth/3, min 3) minus slow EMA (RangeMth),
+//    normalised by the slow EMA so it reads as a relative % rather than $.
+
+Func ScoreMACD(Row, i)
+
+    R = $RangeMth
+    fastSpan = R / 3
+    if fastSpan < 3  fastSpan = 3  ok
+    slowSpan = R
+
+    aWin = PriceWindow(Row, i - (slowSpan *2), i)
+
+    if len(aWin) < slowSpan
+        return ScoreMomentum(Row, i)
+    ok
+
+    emaFast = EMA(aWin, fastSpan)
+    emaSlow = EMA(aWin, slowSpan)
+
+    if emaSlow = 0  return 0  ok
+
+Return (emaFast - emaSlow) / emaSlow
+
+// ================================================
+// 5. Sharpe Momentum:  mean monthly return / std-dev of returns over the window
+//    (risk-adjusted momentum — penalises volatile spikes)
+
+Func ScoreSharpe(Row, i)
+
+    R = $RangeMth
+    aWin = PriceWindow(Row, i - R, i)
+
+    if len(aWin) < 3
+        return ScoreMomentum(Row, i)
+    ok
+
+    aRets = []
+    for idx = 2 to len(aWin)
+        if aWin[idx -1] != 0
+            aRets + ( (aWin[idx] - aWin[idx -1]) / aWin[idx -1] )
+        ok
+    next
+
+    if len(aRets) < 2
+        return ScoreMomentum(Row, i)
+    ok
+
+    mu = ListMean(aRets)
+    sd = ListStdDev(aRets, mu)
+
+    if sd = 0  return 0  ok
+
+Return mu / sd
+
+// ================================================
+// 6. Moving Average Cross:  how far (%) current price is above/below its own
+//    rolling mean over the window
+
+Func ScoreMA(Row, i)
+
+    R = $RangeMth
+    aWin = PriceWindow(Row, i - R, i)
+
+    if len(aWin) = 0  return 0  ok
+
+    ma   = ListMean(aWin)
+    pNow = PriceAt(Row, i)
+
+    if ma = 0 or pNow = 0  return 0  ok
+
+Return (pNow - ma) / ma
+
+// ================================================
+// Helper: percentile-rank normalise a list of scores to [~0,1] (higher score -> higher rank)
+// Ties are NOT averaged (simple stable ordering) — close enough for blend purposes.
+
+Func RankNorm(aVals)
+
+    n = len(aVals)
+    aResult = list(n)
+    if n = 0  return aResult  ok
+
+    aIdx = []
+    for idx = 1 to n  aIdx + idx  next
+
+    // Simple selection sort of indices by value, ascending
+    for a = 1 to n -1
+        for b = a +1 to n
+            if aVals[ aIdx[b] ] < aVals[ aIdx[a] ]
+                temp     = aIdx[a]
+                aIdx[a]  = aIdx[b]
+                aIdx[b]  = temp
+            ok
+        next
+    next
+
+    for rankPos = 1 to n
+        origIdx = aIdx[rankPos]
+        aResult[origIdx] = rankPos / n
+    next
+
+Return aResult
+
+// ================================================
+// 7. Composite (blend):  equal-weight rank-average of Momentum + Sharpe + MACD +
+//    Moving-Average-Cross + Avg-Momentum.  This one is cross-sectional (needs every
+//    stock's score for a given column before it can rank them), so it loops
+//    column-major instead of row-major like the other algorithms.
+
+Func CalcPerformance_Composite()
+
+    for i = $RangeMth +2 to len(aList[1])
+
+        aMom    = []
+        aAvgMom = []
+        aMacd   = []
+        aSharpe = []
+        aMA     = []
+        aRowOk  = []          // Track which rows are valid (not a "Date" row)
+
+        for Row in aList
+            if subStr( Row[1], "Date" )
+                aRowOk  + 0
+                aMom    + 0
+                aAvgMom + 0
+                aMacd   + 0
+                aSharpe + 0
+                aMA     + 0
+            else
+                aRowOk  + 1
+                aMom    + ScoreMomentum(Row, i)
+                aAvgMom + ScoreAvgMomentum(Row, i)
+                aMacd   + ScoreMACD(Row, i)
+                aSharpe + ScoreSharpe(Row, i)
+                aMA     + ScoreMA(Row, i)
+            ok
+        next
+
+        rMom    = RankNorm(aMom)
+        rAvgMom = RankNorm(aAvgMom)
+        rMacd   = RankNorm(aMacd)
+        rSharpe = RankNorm(aSharpe)
+        rMA     = RankNorm(aMA)
+
+        k = 1
+        for Row in aList
+            if aRowOk[k] = 1
+                pList[k][i] = ( rMom[k] + rSharpe[k] + rMacd[k] + rMA[k] + rAvgMom[k] ) / 5.0
+            ok
+            k++
+        next
+
+    next
+
 Return
 
 // ===============================================
@@ -643,6 +1075,7 @@ Return
 // ================================================
 // ================================================ 
 // Show Last $Top10 for last 10 Periods nList
+// SELL below -xx%  -12
 
 
 Func ShowTop10() 
@@ -700,14 +1133,31 @@ Func ShowTop10()
 	alastDate = split(lastDate,"/")     // 15/03/2026 global
 	See "aLastDate: "+ alastDate[3] +"-"+ alastDate[2] +"-"+ alastDate[1] +"  "+ Time() +nl
 
-	See "Sym:      PreMOp:   CurMOp:   NowCl:    $ChgNow:   Pct%     Shares" +nl
-	txtLog.append(" ")+tab+
-	txtLog.append("Sym:" +tab+ "CurMOp:" +tab+ "NowCl:" +tab+ "ChgNow:" +tab+ "Pct%")
-	
+	See "Sym:      PreMOp:   CurMOp:   NowCl:    $ChgNow:   Pct%  Shares" +nl
+
+	// Build complete HTML table in one string, append once after loop  -15%  -12%
+	cT  = "<table cellspacing='0' cellpadding='0'>"
+	cT += "<tr>"
+	cT += "<td width='50'><b>Sym</b></td>"
+	cT += "<td width='80' align='right'><b>CurMOp</b></td>"
+	cT += "<td width='70' align='right'><b>NowCl</b></td>"
+	cT += "<td width='75' align='right'><b>ChgNow</b></td>"
+	cT += "<td width='60' align='right'><b>Pct%</b></td>"
+	cT += "<td width='60' align='right'><b>Drop%</b></td>"
+	cT += "</tr>"
+
 	AvgSum     = 1
 	TotalValue = 0  // Shares * CurPrice
 	AvgValue   = 1  // Avg Stock Value
-	
+
+	// --- Weekly Stop-Sell hook: rebuild this month's Top-10 buy basket ---
+	aTop10Symbols  = []
+	aTop10BuyPrice = []
+	aTop10BuyDate  = []
+	aTop10NowPrice = []
+	aTop10Shares   = []
+	cBuyMonthKey   = "01/" + alastDate[2] + "/" + alastDate[3]   // e.g. "01/07/2026"
+
 	for s = 1 to sRows                          // Each Symbol
 	
 	    itemName =  aShowTop10[s][sCols-1]      // Use 2nd LAST  sCols=last	|| Except 01/mm/yyyy aTimeStamp
@@ -718,44 +1168,82 @@ Func ShowTop10()
 		  
 		
         posA     =  FIND( aList, itemName, 1)           // aList         Search Col-1
-		posC     =  FIND( aClosedPrices, itemName, 1)   // aClosedPrices Search    
+		posC     =  FIND( aClosedPrices, itemName, 1)   // aClosedPrices Search (live-download only, see below)
 		
-		if posA = 0 OR posC = 0
+		// fix 2026-Aug-23: aClosedPrices is only populated during a LIVE
+		// GetQuotes() download and is never actually read for its values
+		// below (NowPrice/CurMonthPr both come from aList) -- it was only
+		// used as an existence check. Requiring posC != 0 made every Top10
+		// row disappear when running offline from a saved CSV, since
+		// aClosedPrices is empty in that case. Only aList (posA) is needed.
+		if posA = 0
 		   See "FIND(): "+ itemName +" NOT Found: PosA= "+ posA +" PosC= "+ posC  +nl
 		   
 		else
 		    //---Chg since start of 01-Month -----------------------
-            //--- Use Current AdjClose Price from aClosedPrices ----------
-		   
-		    ChgPr1    = aClosedPrices[posC][cCols] - aList[posA][bCols-1]    
-		    ChgPct1   = aClosedPrices[posC][cCols] / aList[posA][bCols-1] * 100 -100
-		    NowPrice  = aClosedPrices[posC][cCols]
-		    NbrShares = ceil( $Dollars / aList[posA][bCols-1] )   // $10,000 investment
+            // <<<=== FIX===>>> on 10 year reange -Use Current aList Prices ----------
+
+		    ChgPr1    = aList[posA][bCols]  - aList[posA][bCols-1]    
+		    ChgPct1   = aList[posA][bCols]  / aList[posA][bCols-1] * 100 -100
+		    NowPrice  = aList[posA][bCols] 			
+			
+			CurMonthPr = aList[posA][bCols-1]
+		    NbrShares  = ceil( $Dollars / CurMonthPr )   // SHARES on $10,000 investment
 		   
 		   	TotalValue += NbrShares * NowPrice 
             AvgValue    = TotalValue / sRows			
 		    AvgSum     += ChgPct1 
-			
+
+			// --- Weekly Stop-Sell hook: record this symbol's monthly buy ---
+			Add(aTop10Symbols,  itemName)
+			Add(aTop10BuyPrice, CurMonthPr)
+			Add(aTop10BuyDate,  cBuyMonthKey)
+			Add(aTop10NowPrice, NowPrice)
+			Add(aTop10Shares,   NbrShares)
 		   
-            See ""+ PadR( 7, itemName)             +" "    // itemName in bList BuyList
+            See ""+ PadR( 5, itemName)             +" "    // itemName in bList BuyList
 		    See ""+ PadL( 9, aList[posA][bCols-2]) +" "    // PrevMonth
 			See ""+ PadL( 9, aList[posA][bCols-1]) +" "    // CurMonth
 			See ""+ PadL( 9, NowPrice)             +" "    // Now Price				   				   
 			See ""+ PadL( 9, ChgPr1)               +" "    // Change Price
 			See ""+ PadL( 9, ChgPct1)              +" "    // Pct%		
-			See "  ("+ PadL( 4,NbrShares) +")"     +nl     // Nbr Shares
-					
-			txtLog.append(itemName +tab+ aList[posA][bCols-1] +tab+ NowPrice +tab+ ChgPr1 +tab+ ChgPct1)
+			See " ("+ NbrShares +")"                       // Nbr Shares
+			if ChgPct1 <= sellBelow                        // -12% SELL
+			   See " SELL"
+			ok
+			See nl
+
+			// Accumulate each row into HTML table string
+			// Color negative values red
+			cChgColor = ""
+			cPctColor = ""
+			if ChgPr1  < 0   cChgColor = " style='color:red;'"   ok
+			if ChgPct1 < 0   cPctColor = " style='color:red;'"   ok
+
+			cT += "<tr>"
+			cT += "<td width='50'>" + itemName + "</td>"
+			cT += "<td width='80' align='right'>" + NumFmt(aList[posA][bCols-1]) + "</td>"
+			cT += "<td width='70' align='right'>" + NumFmt(NowPrice)  + "</td>"
+			cT += "<td width='75' align='right'"+ cChgColor +">" + NumFmt(ChgPr1)  + "</td>"
+			cT += "<td width='60' align='right'"+ cPctColor +">" + NumFmt(ChgPct1) + "</td>"
+			if ChgPct1 <= sellBelow  
+			   cT += "<td width='60' align='right'"+ cPctColor +">" + "SELL" + "</td>"
+			ok
+			cT += "</tr>"
 					
 	    ok
 	next
+
+	cT += "</table>"
+	txtLog.append(" ")
+	txtLog.append(cT)
+	txtLog.append(" ")
 	
 	See nl+"TotalValue: "+ TotalValue +" AvgValue: "+ AvgValue +" AvgPct: "+ (AvgSum / sRows) +nl
 	
 	AvgValue = AvgSum / sRows
 	See nl+"Average Result: NbrStock: "+ sRows +" AvgValue:  "+ AvgValue +nl
 	
-	txtLog.append(" ")
 	txtLog.append("AVG Pct:" +tab+ AvgValue)
 	
 	// -----------------------------------------
@@ -809,7 +1297,13 @@ Func ShowTop10()
 cellNbr  = len(aSumTotal[3]) -1         //  FIX -1
 $maxQQQ  =     aSumTotal[2][cellNbr]
 $maxTOT  =     aSumTotal[3][cellNbr]
-$Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
+if len(aSumTotal) >= 4
+    $maxSPY  = aSumTotal[4][cellNbr]
+ok
+$Ratio    = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio  (vs QQQ)
+$RatioSPY = ($maxTot -1) / ($MaxSPY -1)   // Multi-Bagger to Percent Ratio  (vs SPY)
+
+ComputePortfolioStats(cellNbr)    // Sets $CAGR, $Sharpe, $MaxDD  from aSumTotal[3] (TOT series)
 
 	    // ---------------------------------
 	    // EpochSecs  = aTimeStamp[len(aTimeStamp)]
@@ -834,10 +1328,21 @@ $Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
 		    next
 		else
 		    //------------------------------------------
-		    // Fake the Dates, GetQuotes was Not Run
+		    // fix 2026-Aug-23: GetQuotes was NOT run this session (offline run
+		    // using a saved AAA-Spread.csv) so there is no live aTimeStamp.
+		    // Rebuild the same date labels from the CSV's own "Date" row
+		    // (aCsvDateRow, set in SyncOfflineDateScaffold()) instead of
+		    // leaving aDateRead empty -- an empty aDateRead crashes further
+		    // below with an Array Access (Index out of range) error.
 
-            //aDateRead = ["01/03/","01/04/","01/05/","01/06/","01/07/",
-	        //             "01/08/","01/09/","01/10/","01/11/","01/12/","    Today"]		
+		    if aCsvDateRow != null
+		        nDateCols = len(aCsvDateRow)
+		        for S = nDateCols - sCols +2 to nDateCols        // last (sCols-1) saved dates
+		            DateHuman = aCsvDateRow[S]                   // "dd/mm/yyyy"
+		            dateDDMM  = subStr(DateHuman, 1, 6)          // "dd/mm/"
+		            Add (aDateRead , dateDDMM)
+		        next
+		    ok
 		ok	
 
         //---------------
@@ -851,14 +1356,14 @@ $Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
 		for d = 1 to len(aDateRead) - 1          
 		    See ""+aDateRead[d] +"  "
 		next
-		See Date() +nl
+		See Date() +" Pct" +nl
 		
 	
 	    //--- Nbrs 12 11 .. 2 1 ------------
 		for d = len(aDateRead) - 1 to 1 step -1  
 		    See ""+d +tab
 		next
-		See "Today" +nl		
+		See "Today" +" Pct" +nl		
 		
 		
 		//-----------------------------------------
@@ -904,6 +1409,8 @@ $Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
 
 	txtLog.append(" " )	
 	txtLog.append( "QQQ: "+ $maxQQQ +" TOT: "+ $maxTOT +" Ratio: "+ $Ratio )
+	txtLog.append( "SPY: "+ $maxSPY +" TOT: "+ $maxTOT +" Ratio: "+ $RatioSPY )
+	txtLog.append( "CAGR: "+ NumFmt($CAGR *100) +"%  Sharpe: "+ NumFmt($Sharpe) +"  MaxDrawdown: -"+ NumFmt($MaxDD *100) +"%" )
 	txtLog.append(">===== TopTen =====<" )	
 
 	
@@ -915,6 +1422,79 @@ $Ratio   = ($maxTot -1) / ($MaxQQQ -1)   // Multi-Bagger to Percent Ratio
 	ok
 	
 	//---------------------------------
+
+Return
+
+//=================================================
+// COMPUTE PORTFOLIO STATS -- CAGR / Sharpe / Max Drawdown
+//
+// Mirrors the Python app's backtest() stats block:
+//   cagr   = port_compound ** (12 / n_months) - 1
+//   sharpe = mean(monthly_ret -1) / std(monthly_ret -1) * sqrt(12)
+//   max_dd = biggest peak-to-trough drop of the compounded portfolio curve
+//
+// Uses aSumTotal[3] (TOT = portfolio compounded value per month), which is
+// only valid from index ($RangeMth +2) .. cellNbr  (same window $maxQQQ/$maxTOT use)
+// Sets Globals: $CAGR, $Sharpe, $MaxDD   (all as fractions, eg 0.25 = 25%)
+
+Func ComputePortfolioStats(cellNbr)
+
+    $CAGR   = 0
+    $Sharpe = 0
+    $MaxDD  = 0
+
+    startIdx = $RangeMth + 2
+    endIdx   = cellNbr
+
+    if endIdx < startIdx  return  ok
+
+    //--- Collect the valid TOT compounded values -------------------
+    aTotVals = []
+    for idx = startIdx to endIdx
+        Add(aTotVals, aSumTotal[3][idx])
+    next
+
+    if len(aTotVals) < 2  return  ok
+
+    //--- Monthly returns:  ratio_i = TOT[i] / TOT[i-1] --------------
+    aMoRet = []
+    for idx = 2 to len(aTotVals)
+        prev = aTotVals[idx -1]
+        cur  = aTotVals[idx]
+        if prev != 0
+            Add(aMoRet, cur / prev)
+        ok
+    next
+
+    nMonths = len(aMoRet)
+
+    //--- CAGR:  compound ** (12/nMonths) -1 --------------------------
+    if nMonths > 0 and $maxTOT > 0
+        $CAGR = pow($maxTOT, 12 / nMonths) -1
+    ok
+
+    //--- Sharpe:  mean(monthlyRet -1) / stddev(monthlyRet -1) * sqrt(12)
+    aExcess = []
+    for r in aMoRet
+        Add(aExcess, r -1)
+    next
+
+    muExcess = ListMean(aExcess)
+    sdExcess = ListStdDev(aExcess, muExcess)
+
+    if sdExcess > 0
+        $Sharpe = (muExcess / sdExcess) * sqrt(12)
+    ok
+
+    //--- Max Drawdown:  biggest peak-to-trough drop of the TOT curve --
+    peak = aTotVals[1]
+    for v in aTotVals
+        if v > peak  peak = v  ok
+        if peak > 0
+            dd = (peak - v) / peak
+            if dd > $MaxDD  $MaxDD = dd  ok
+        ok
+    next
 
 Return
 
@@ -1097,31 +1677,36 @@ Func SummaryTotal
     nRow = len(cList)                            // cList = Compound
     nCol = len(cList[1])    
     
-    aSumTotal       = list(3, len(cList[1]) )    // CREATE List 3 x NbrStocks -- Nbr::QQQ::TOT each period
-    aSumTotal[1][1] = 1                           
+    aSumTotal       = list(4, len(cList[1]) )    // CREATE List 4 x NbrStocks -- Nbr::QQQ::TOT::SPY each period
+    aSumTotal[1][1] = "NBR"                           
     aSumTotal[2][1] = "QQQ"
     aSumTotal[3][1] = "TOT"
+    aSumTotal[4][1] = "SPY"
         
 
     //--- TOT Compounded from cList[nRow][k] -----
 
-    TCmp = 1
+    TCmp  = 1
     QInit = aList[1][$RangeMth +2]                   // QQQ  row 1
+    SInit = aList[2][$RangeMth +2]                   // SPY  row 2
 	
     //See "QInit: "+ QInit +nl
 
-    for k = $RangeMth+ 2 to nCol -1    // FIX  -1 
+    for k = $RangeMth + 2 to nCol -1    // FIX  -1 
         QChg = aList[1][k] / QInit               // QQQ  row 1      
+        SChg = aList[2][k] / SInit               // SPY  row 2
         TCmp = cList[nRow][k]                    // TOT  row last
                 
-        //See ""+ k +" TOT: "+ TCmp  +"  QQQ: "+ QChg  +nl
+        //See ""+ k +" TOT: "+ TCmp  +"  QQQ: "+ QChg +"  SPY: "+ SChg +nl
 
-        aSumTotal[1][k] = k                // Position
+        aSumTotal[1][k] = k  -1               // Position
         aSumTotal[2][k] = QChg             // QQQ   cmp
         aSumTotal[3][k] = TCmp             // Total cmp
+        aSumTotal[4][k] = SChg             // SPY   cmp
     
     next
         aSumTotal[3][nCol-1] = aSumTotal[3][nCol-2] // Force last entry to match QQQ
+        aSumTotal[4][nCol-1] = aSumTotal[4][nCol-2] // Force last entry to match SPY
 
     if DebugTCList = 1   
         See nl+"<----- Debug Total - Compounded  ----->"+nl
@@ -1130,6 +1715,22 @@ Func SummaryTotal
 
 Return
 
+
+// ================================================
+// NumFmt() = Always format number to exactly 2 decimal places
+// 536 => "536.00"   -14.4 => "-14.40"   32.46 => "32.46"
+
+Func NumFmt( n )
+    n       = 0+ n              // ensure numeric
+    cSign   = ""
+    if n < 0   cSign = "-"   n = -n   ok
+    nInt    = floor(n)
+    nFrac   = n - nInt
+    nCents  = floor(nFrac * 100 + 0.5)   // round
+    if nCents >= 100   nInt++   nCents = 0   ok
+    cCents  = string(nCents)
+    if len(cCents) = 1   cCents = "0" + cCents   ok
+    return cSign + string(nInt) + "." + cCents
 
 // ================================================
 // PADL() = Pad Left -- Add spaces on Left Side
@@ -1177,7 +1778,7 @@ Return newItem
 // ================================================
 //
 // DrawChartQT()
-//    aSumTotal[1][1] = 1                           
+//    aSumTotal[1][1] = "NBR"                           
 //    aSumTotal[2][1] = "QQQ"
 //    aSumTotal[3][1] = "TOT"
 //
@@ -1217,7 +1818,7 @@ ChartView {
         id:                   axisX
         min:                  0
         max:                  ' + (len(aSumTotal[2]) - 1) + ' 
-        titleText:           "Months"
+        titleText:           "Periods"
         titleFont.pixelSize:  14
         labelsFont.pixelSize: 12
         gridVisible:          true

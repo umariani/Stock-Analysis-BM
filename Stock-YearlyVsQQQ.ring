@@ -10,8 +10,7 @@ oYearlyTable = null
 aYearData    = []
 
 // ============================================================
-// DrawYearly() - plain function, paints directly on oYearlyChart
-// Uses brushWhite, brushBlue from Stock-DrawChart.ring globals
+// DrawYearly()
 // ============================================================
 
 Func DrawYearly()
@@ -22,7 +21,6 @@ Func DrawYearly()
     h = oYearlyChart.height()
     if w < 10 or h < 10   return   ok
 
-    // Layout
     mLeft   = 65
     mRight  = 15
     mTop    = 45
@@ -38,7 +36,6 @@ Func DrawYearly()
         return
     ok
 
-    // Find min/max across all returns
     vMax = -9999   vMin = 9999
     for yi = 1 to nYears
         v2 = aYearData[yi][2]
@@ -55,18 +52,14 @@ Func DrawYearly()
     vRange = vMax - vMin
     if vRange = 0   vRange = 1   ok
 
-    // Zero line Y
-    zeroY = mTop + plotH * (1.0 - (-vMin / vRange))
-
-    // Bar dimensions
+    zeroY  = mTop + plotH * (1.0 - (-vMin / vRange))
     gap    = 6
     groupW = plotW / nYears
     barW   = (groupW - gap * 2) / 3 - 1
 
-    // SPY brush (orange) - defined inline since not in DrawChart globals
-    colorSPY2  = new qcolor()
+    colorSPY2 = new qcolor()
     colorSPY2.setrgb(200, 100, 0, 255)
-    brushSPY2  = new qbrush()
+    brushSPY2 = new qbrush()
     brushSPY2.setstyle(1)
     brushSPY2.setcolor(colorSPY2)
 
@@ -75,11 +68,8 @@ Func DrawYearly()
     new qpainter() {
         begin(p1)
         setRenderHint(QPainter_Antialiasing, true)
-
-        // White background
         fillRect(0, 0, w, h, brushWhite)
 
-        // Grid lines
         setPen(penGrid)
         nGrid = 5
         for g = 0 to nGrid
@@ -92,11 +82,9 @@ Func DrawYearly()
             setPen(penGrid)
         next
 
-        // Zero line
         setPen(penBlack)
         drawLine(mLeft, zeroY, mLeft + plotW, zeroY)
 
-        // Bars
         for yi = 1 to nYears
             portPct = aYearData[yi][2]
             qqqPct  = aYearData[yi][3]
@@ -104,33 +92,28 @@ Func DrawYearly()
             cYear   = aYearData[yi][1]
             bYTD    = aYearData[yi][7]
 
-            groupX  = mLeft + (yi - 1) * groupW + gap
+            groupX = mLeft + (yi - 1) * groupW + gap
 
-            // Portfolio bar - Blue
             barH = fabs(portPct) / vRange * plotH
             if portPct >= 0   barY = zeroY - barH   else   barY = zeroY   ok
             fillRect(groupX,              barY, barW, barH+1, brushBlue)
 
-            // QQQ bar - Gray
             barH = fabs(qqqPct) / vRange * plotH
             if qqqPct >= 0    barY = zeroY - barH   else   barY = zeroY   ok
             fillRect(groupX + barW + 1,   barY, barW, barH+1, brushGray)
 
-            // SPY bar - Orange
             barH = fabs(spyPct) / vRange * plotH
             if spyPct >= 0    barY = zeroY - barH   else   barY = zeroY   ok
             fillRect(groupX + (barW+1)*2, barY, barW, barH+1, brushSPY2)
 
-            // Year label
             setPen(penBlack)
             setFont(new qfont("Arial", 10, 50, 0))
             cYLbl = cYear
-            if bYTD = 1   cYLbl = cYear + " YTD"   ok
+            if bYTD = 1   cYLbl = "YTD " + cYear   ok
             lx = groupX + groupW / 2 - 24
             drawText(lx, h - mBottom + 18, cYLbl)
         next
 
-        // Legend
         setFont(new qfont("Arial", 10, 50, 0))
         fillRect(mLeft+10,       mTop-28, 16, 10, brushBlue)
         fillRect(mLeft+10+80,    mTop-28, 16, 10, brushGray)
@@ -140,7 +123,6 @@ Func DrawYearly()
         drawText(mLeft+10+100,   mTop-19, "QQQ")
         drawText(mLeft+10+175,   mTop-19, "SPY")
 
-        // Chart title
         setFont(new qfont("Arial", 11, 75, 0))
         drawText(mLeft + plotW/2 - 130, mTop - 8,
                  "Calendar Year Returns  (Portfolio / QQQ / SPY)")
@@ -166,15 +148,12 @@ Func PctColor(n)
     return "#ff4444"
 
 
-
-// SPY bar color - orange (DrawChart has no orange brush)
 colorSPY2 = new qcolor() { setrgb(200, 100, 0, 255) }
 brushSPY2 = new qbrush() { setstyle(1) setcolor(colorSPY2) }
 
 Func BuildYearlyTab(tabWidget)
 
     oYearlyTab = new QWidget()
-
     hSplit = new QHBoxLayout()
 
     # ---- LEFT: chart frame ----
@@ -192,19 +171,15 @@ Func BuildYearlyTab(tabWidget)
     chartFrameLayout.addWidget(oYearlyChart)
     chartFrame.setLayout(chartFrameLayout)
 
-    # ---- RIGHT: table frame ----
+    # ---- RIGHT: Year-by-Year table ----
     tableFrame = new QFrame(win, 0)
     tableFrame.setFrameShape(QFrame_StyledPanel)
-    tableFrame.setFixedWidth(500)                      // (430)
+    tableFrame.setFixedWidth(500)
     tableFrameLayout = new QVBoxLayout()
 
     lblTableTitle = new QLabel(win)
     lblTableTitle.setText("Year-by-Year Results")
-	
-	
-    lblTableTitle.setStyleSheet("color: #0000cc; font-weight: bold; font-size: 16px;")   // #0000cc 14px
-	
-
+    lblTableTitle.setStyleSheet("color: #0000cc; font-weight: bold; font-size: 16px;")
     lblTableTitle.setMaximumHeight(28)
     tableFrameLayout.addWidget(lblTableTitle)
 
@@ -212,22 +187,19 @@ Func BuildYearlyTab(tabWidget)
     oYearlyTable.setColumnCount(6)
     oYearlyTable.setRowCount(0)
     oHeaderLabels = new QStringList()
-	
     oHeaderLabels.append("Year")
     oHeaderLabels.append("Portfolio")
     oHeaderLabels.append("QQQ %")
     oHeaderLabels.append("SPY %")
     oHeaderLabels.append("vs QQQ")
     oHeaderLabels.append("vs SPY")
-	
     oYearlyTable.setHorizontalHeaderLabels(oHeaderLabels)
     oYearlyTable.horizontalHeader().setStretchLastSection(true)
     oYearlyTable.setEditTriggers(0)
     oYearlyTable.setAlternatingRowColors(false)
-	
     oYearlyTable.setStyleSheet("
         QTableWidget {
-            background-color: #eeeef6;  // #1a1a2e;
+            background-color: #eeeef6;
             color: #00ff00;
             gridline-color: #333366;
             font-size: 14px;
@@ -243,20 +215,20 @@ Func BuildYearlyTab(tabWidget)
         }
         QTableWidget::item { padding: 3px 6px; }
     ")
-	
-    oYearlyTable.setColumnWidth(0, 70)
+    oYearlyTable.setColumnWidth(0, 95)
     oYearlyTable.setColumnWidth(1, 80)
     oYearlyTable.setColumnWidth(2, 65)
     oYearlyTable.setColumnWidth(3, 65)
     oYearlyTable.setColumnWidth(4, 70)
     oYearlyTable.setColumnWidth(5, 70)
     tableFrameLayout.addWidget(oYearlyTable)
+
     tableFrame.setLayout(tableFrameLayout)
 
     hSplit.addWidget(chartFrame)
     hSplit.addWidget(tableFrame)
-    hSplit.setStretch(0, 3)         // 0, 3
-    hSplit.setStretch(1, 0)         // 1, 0
+    hSplit.setStretch(0, 3)
+    hSplit.setStretch(1, 0)
     oYearlyTab.setLayout(hSplit)
 
     tabWidget.addTab(oYearlyTab, "Yearly vs QQQ")
@@ -269,11 +241,10 @@ Return oYearlyTab
 Func RefreshYearlyTab()
 
     if oYearlyChart = null   return  ok
-
     aYearData = CalcYearlyReturns()
-	
     DrawYearly()
-    PopulateYearlyTable(aYearData)
+    aLast12   = CalcLast12Month()
+    PopulateYearlyTable(aYearData, aLast12)
 
 Return
 
@@ -281,10 +252,8 @@ Return
 Func CalcYearlyReturns()
 
     aYearData = []
-
     if len(aTDate) < 2   return aYearData   ok
 
-    // Find QQQ and SPY rows in aList
     posQQQ = 0   posSPY = 0
     for r = 1 to len(aList)
         if aList[r][1] = "QQQ"  posQQQ = r  ok
@@ -294,9 +263,7 @@ Func CalcYearlyReturns()
 
     nAListCols = len(aList[posQQQ])
     nDates     = len(aTDate)
-    nST        = len(aSumTotal[3])
 
-    // Detect colOffset from leading duplicate price columns
     colOffset  = 3
     firstPrice = "" + aList[posQQQ][2]
     for c = 3 to nAListCols
@@ -306,65 +273,52 @@ Func CalcYearlyReturns()
         ok
     next
 
-    // lastRealCol excludes bogus extra column appended after aTDate was built
     lastRealCol = nDates + colOffset
     if lastRealCol > nAListCols   lastRealCol = nAListCols   ok
 
-    // -------------------------------------------------------
-    // Build janCols: map year -> aList column of January price
-    // aTDate[i] = "dd/mm/yyyy", aList col = i + colOffset
-    // -------------------------------------------------------
-    janCols  = []   // list of [cYear, aListCol]
+    janCols    = []
+    lastJanYear = ""
     for i = 1 to nDates
         aParts = split(aTDate[i], "/")
         cMon   = aParts[2]
         cYear  = aParts[3]
         if cMon = "01"
-            Add(janCols, [cYear, i + colOffset])
+            // For weekly data there are multiple January weeks per year.
+            // Keep only the FIRST January entry for each year.
+            if cYear != lastJanYear
+                Add(janCols, [cYear, i + colOffset])
+                lastJanYear = cYear
+            ok
         ok
     next
-
     if len(janCols) < 1   return aYearData   ok
 
-    // -------------------------------------------------------
-    // Build year entries: Jan-to-Jan for complete years, Jan-to-now for YTD
-    // -------------------------------------------------------
     aYearMap = []
     nJan     = len(janCols)
-
     for j = 1 to nJan
-        cYear  = janCols[j][1]
-        scCol  = janCols[j][2]         // Jan 1 of this year
-
+        cYear = janCols[j][1]
+        scCol = janCols[j][2]
         if j < nJan
-            // Complete year: Jan this year to Jan next year
-            ecCol  = janCols[j+1][2]   // Jan 1 of next year
-            bYTD   = 0
+            ecCol = janCols[j+1][2]
+            bYTD  = 0
         else
-            // Last January found: YTD to lastRealCol
-            ecCol  = lastRealCol
-            bYTD   = 1
+            ecCol = lastRealCol
+            bYTD  = 1
         ok
-
         Add(aYearMap, [cYear, scCol, ecCol, bYTD])
     next
 
-    // -------------------------------------------------------
-    // Calculate returns for each year using aList prices directly
-    // -------------------------------------------------------
     for entry in aYearMap
-        cYear  = entry[1]
-        scCol  = entry[2]
-        ecCol  = entry[3]
-        bYTD   = entry[4]
+        cYear = entry[1]
+        scCol = entry[2]
+        ecCol = entry[3]
+        bYTD  = entry[4]
 
-        // Clamp
         if scCol < 2            scCol = 2            ok
         if scCol > lastRealCol  scCol = lastRealCol  ok
         if ecCol > lastRealCol  ecCol = lastRealCol  ok
         if ecCol < scCol        ecCol = scCol        ok
 
-        // QQQ return: Jan price to Jan-next (or latest) price
         qStart = 0 + aList[posQQQ][scCol]
         qEnd   = 0 + aList[posQQQ][ecCol]
         if qStart < 0.01   qStart = qEnd    ok
@@ -372,7 +326,6 @@ Func CalcYearlyReturns()
         if qStart = 0      qStart = 1       ok
         qqqPct = (qEnd / qStart - 1) * 100
 
-        // SPY return
         spyPct = 0
         if posSPY > 0
             nSCols = len(aList[posSPY])
@@ -383,57 +336,186 @@ Func CalcYearlyReturns()
             sEnd   = 0 + aList[posSPY][ec2]
             if sStart < 0.01  sStart = sEnd    ok
             if sEnd   < 0.01  sEnd   = sStart  ok
-            if sStart = 0     sStart = 1        ok
+            if sStart = 0     sStart = 1       ok
             spyPct = (sEnd / sStart - 1) * 100
         ok
 
-        // Portfolio return from aSumTotal[3]
-        // aSumTotal[k] = value at aList col (k+1), so col c -> index c-1
         portPct = 0
         nCRow   = len(cList)
         if nCRow > 0
-            nCCols = len(cList[nCRow])
-
-            // Start: scCol-1 = end of previous year (Dec compound value)
-            // cList[k] records gain from buying at col k, selling at k+1
-            // So year start = last compound value BEFORE this year's January
+            nCCols       = len(cList[nCRow])
             portStartCol = scCol - 1
             if portStartCol < 2   portStartCol = 2   ok
-            tStart = 0 + cList[nCRow][portStartCol]
+            
+			tStart = 0 + cList[nCRow][portStartCol]
             if tStart < 0.0001
                 for fwd = portStartCol to nCCols
                     tStart = 0 + cList[nCRow][fwd]
                     if tStart > 0.0001   exit   ok
                 next
             ok
-
-            // End: walk backward from ecCol to find last non-zero
+			
             tEnd = 0 + cList[nCRow][ecCol]
             if tEnd < 0.0001
                 for bk = ecCol to 1 step -1
                     tEnd = 0 + cList[nCRow][bk]
+					
+### See " nCRow: "+ nCRow +nl
+### See " bk: "+bk +nl
+### See " cList[nCRow][bk]: "+ cList[nCRow][bk] +nl	
+### See " tEnd: "+ tEnd +nl
+				
                     if tEnd > 0.0001   exit   ok
                 next
             ok
-
+			
             if tStart > 0.0001
                 portPct = (tEnd / tStart - 1) * 100
             ok
         ok
+
         vsQQQ = portPct - qqqPct
         vsSPY = portPct - spyPct
-
         Add(aYearData, [cYear, portPct, qqqPct, spyPct, vsQQQ, vsSPY, bYTD])
     next
 
 Return aYearData
 
-Func PopulateYearlyTable(aYearData)
+
+// ============================================================
+// CalcLast12Month()  --  Rolling 12-month window ending on the
+// most recent data point (not tied to calendar-year boundaries).
+// Returns [] if there isn't enough data, else
+// [portPct, qqqPct, spyPct, vsQQQ, vsSPY]
+// ============================================================
+
+Func CalcLast12Month()
+
+    aResult = []
+    if len(aTDate) < 2   return aResult   ok
+
+    posQQQ = 0   posSPY = 0
+    for r = 1 to len(aList)
+        if aList[r][1] = "QQQ"  posQQQ = r  ok
+        if aList[r][1] = "SPY"  posSPY = r  ok
+    next
+    if posQQQ = 0   return aResult   ok
+
+    nAListCols = len(aList[posQQQ])
+    nDates     = len(aTDate)
+
+    colOffset  = 3
+    firstPrice = "" + aList[posQQQ][2]
+    for c = 3 to nAListCols
+        if ("" + aList[posQQQ][c]) != firstPrice
+            colOffset = c - 2
+            break
+        ok
+    next
+
+    lastRealCol = nDates + colOffset
+    if lastRealCol > nAListCols   lastRealCol = nAListCols   ok
+
+    // End date = most recent date in the series
+    aEndParts = split(aTDate[nDates], "/")
+    endMon    = 0 + aEndParts[2]
+    endYear   = 0 + aEndParts[3]
+
+    // Boundary = same month, one year back
+    targetMon  = endMon
+    targetYear = endYear - 1
+
+    // First date on/after that boundary = start of the trailing 12 months
+    startIdx = 1
+    for i = 1 to nDates
+        aP   = split(aTDate[i], "/")
+        mm   = 0 + aP[2]
+        yyyy = 0 + aP[3]
+        if (yyyy > targetYear) or (yyyy = targetYear and mm >= targetMon)
+            startIdx = i
+            exit
+        ok
+    next
+
+    scCol = startIdx + colOffset
+    ecCol = lastRealCol
+
+    if scCol < 2            scCol = 2            ok
+    if scCol > lastRealCol  scCol = lastRealCol  ok
+    if ecCol > lastRealCol  ecCol = lastRealCol  ok
+    if ecCol < scCol        ecCol = scCol        ok
+
+    qStart = 0 + aList[posQQQ][scCol]
+    qEnd   = 0 + aList[posQQQ][ecCol]
+    if qStart < 0.01   qStart = qEnd    ok
+    if qEnd   < 0.01   qEnd   = qStart  ok
+    if qStart = 0       qStart = 1       ok
+    qqqPct = (qEnd / qStart - 1) * 100
+
+    spyPct = 0
+    if posSPY > 0
+        nSCols = len(aList[posSPY])
+        sc2 = scCol   ec2 = ecCol
+        if sc2 > nSCols  sc2 = nSCols  ok
+        if ec2 > nSCols  ec2 = nSCols  ok
+        sStart = 0 + aList[posSPY][sc2]
+        sEnd   = 0 + aList[posSPY][ec2]
+        if sStart < 0.01  sStart = sEnd    ok
+        if sEnd   < 0.01  sEnd   = sStart  ok
+        if sStart = 0     sStart = 1       ok
+        spyPct = (sEnd / sStart - 1) * 100
+    ok
+
+    portPct = 0
+    nCRow   = len(cList)
+    if nCRow > 0
+        nCCols       = len(cList[nCRow])
+        portStartCol = scCol - 1
+        if portStartCol < 2   portStartCol = 2   ok
+
+        tStart = 0 + cList[nCRow][portStartCol]
+        if tStart < 0.0001
+            for fwd = portStartCol to nCCols
+                tStart = 0 + cList[nCRow][fwd]
+                if tStart > 0.0001   exit   ok
+            next
+        ok
+
+        tEnd = 0 + cList[nCRow][ecCol]
+        if tEnd < 0.0001
+            for bk = ecCol to 1 step -1
+                tEnd = 0 + cList[nCRow][bk]
+                if tEnd > 0.0001   exit   ok
+            next
+        ok
+
+        if tStart > 0.0001
+            portPct = (tEnd / tStart - 1) * 100
+        ok
+    ok
+
+    vsQQQ = portPct - qqqPct
+    vsSPY = portPct - spyPct
+
+    Add(aResult, portPct)
+    Add(aResult, qqqPct)
+    Add(aResult, spyPct)
+    Add(aResult, vsQQQ)
+    Add(aResult, vsSPY)
+
+Return aResult
+
+
+Func PopulateYearlyTable(aYearData, aLast12)
 
     if oYearlyTable = null   return  ok
 
+    bLast12  = (len(aLast12) = 5)
+    nRows    = len(aYearData)
+    if bLast12   nRows = nRows + 1   ok
+
     oYearlyTable.setRowCount(0)
-    oYearlyTable.setRowCount(len(aYearData))
+    oYearlyTable.setRowCount(nRows)
 
     for r = 1 to len(aYearData)
         row     = aYearData[r]
@@ -446,15 +528,9 @@ Func PopulateYearlyTable(aYearData)
         bYTD    = row[7]
 
         cYearLbl = cYear
-        if bYTD = 1   cYearLbl = cYear + " YTD"   ok
+        if bYTD = 1   cYearLbl = "YTD " + cYear   ok
 
-        cPort = FormatPct(portPct)
-        cQQQ  = FormatPct(qqqPct)
-        cSPY  = FormatPct(spyPct)
-        cVQ   = FormatPct(vsQQQ)
-        cVS   = FormatPct(vsSPY)
-
-                oItemFont = new qfont("Arial", 12, 50, 0)
+        oItemFont = new qfont("Arial", 12, 50, 0)
 
         YearItem = new QTableWidgetItem("1Year")
         YearItem.setText(cYearLbl)
@@ -463,31 +539,31 @@ Func PopulateYearlyTable(aYearData)
         YearItem.setFont(oItemFont)
 
         PortItem = new QTableWidgetItem("2Port")
-        PortItem.setText(cPort)
+        PortItem.setText(FormatPct(portPct))
         if portPct >= 0   PortItem.setForeground(brushBlue)   else   PortItem.setForeground(brushRed)   ok
         PortItem.setTextAlignment(0x0082)
         PortItem.setFont(oItemFont)
 
         QQQItem = new QTableWidgetItem("3QQQ")
-        QQQItem.setText(cQQQ)
+        QQQItem.setText(FormatPct(qqqPct))
         if qqqPct >= 0   QQQItem.setForeground(brushBlue)   else   QQQItem.setForeground(brushRed)   ok
         QQQItem.setTextAlignment(0x0082)
         QQQItem.setFont(oItemFont)
 
         SPYItem = new QTableWidgetItem("4SPY")
-        SPYItem.setText(cSPY)
+        SPYItem.setText(FormatPct(spyPct))
         if spyPct >= 0   SPYItem.setForeground(brushBlue)   else   SPYItem.setForeground(brushRed)   ok
         SPYItem.setTextAlignment(0x0082)
         SPYItem.setFont(oItemFont)
 
         VQItem = new QTableWidgetItem("5VQ")
-        VQItem.setText(cVQ)
+        VQItem.setText(FormatPct(vsQQQ))
         if vsQQQ >= 0   VQItem.setForeground(brushBlue)   else   VQItem.setForeground(brushRed)   ok
         VQItem.setTextAlignment(0x0082)
         VQItem.setFont(oItemFont)
 
         VSItem = new QTableWidgetItem("6VS")
-        VSItem.setText(cVS)
+        VSItem.setText(FormatPct(vsSPY))
         if vsSPY >= 0   VSItem.setForeground(brushBlue)   else   VSItem.setForeground(brushRed)   ok
         VSItem.setTextAlignment(0x0082)
         VSItem.setFont(oItemFont)
@@ -500,4 +576,69 @@ Func PopulateYearlyTable(aYearData)
         oYearlyTable.setItem(r-1, 5, VSItem)
     next
 
+    // ---- Extra row: rolling Last-12-Month performance, highlighted ----
+    if bLast12
+        rr = len(aYearData) + 1          // 1-based row number
+
+        portPct = aLast12[1]
+        qqqPct  = aLast12[2]
+        spyPct  = aLast12[3]
+        vsQQQ   = aLast12[4]
+        vsSPY   = aLast12[5]
+
+        colorLast12BG = new qcolor() { setrgb(255, 249, 196, 255) }   // pale yellow
+        brushLast12BG = new qbrush() { setstyle(1) setcolor(colorLast12BG) }
+        oBoldFont     = new qfont("Arial", 12, 75, 0)
+
+        YearItem = new QTableWidgetItem("7Last12")
+        YearItem.setText("12-Mth")
+        YearItem.setForeground(brushBlack)
+        YearItem.setBackground(brushLast12BG)
+        YearItem.setTextAlignment(0x0082)
+        YearItem.setFont(oBoldFont)
+
+        PortItem = new QTableWidgetItem("8Port")
+        PortItem.setText(FormatPct(portPct))
+        if portPct >= 0   PortItem.setForeground(brushBlue)   else   PortItem.setForeground(brushRed)   ok
+        PortItem.setBackground(brushLast12BG)
+        PortItem.setTextAlignment(0x0082)
+        PortItem.setFont(oBoldFont)
+
+        QQQItem = new QTableWidgetItem("9QQQ")
+        QQQItem.setText(FormatPct(qqqPct))
+        if qqqPct >= 0   QQQItem.setForeground(brushBlue)   else   QQQItem.setForeground(brushRed)   ok
+        QQQItem.setBackground(brushLast12BG)
+        QQQItem.setTextAlignment(0x0082)
+        QQQItem.setFont(oBoldFont)
+
+        SPYItem = new QTableWidgetItem("ASPY")
+        SPYItem.setText(FormatPct(spyPct))
+        if spyPct >= 0   SPYItem.setForeground(brushBlue)   else   SPYItem.setForeground(brushRed)   ok
+        SPYItem.setBackground(brushLast12BG)
+        SPYItem.setTextAlignment(0x0082)
+        SPYItem.setFont(oBoldFont)
+
+        VQItem = new QTableWidgetItem("BVQ")
+        VQItem.setText(FormatPct(vsQQQ))
+        if vsQQQ >= 0   VQItem.setForeground(brushBlue)   else   VQItem.setForeground(brushRed)   ok
+        VQItem.setBackground(brushLast12BG)
+        VQItem.setTextAlignment(0x0082)
+        VQItem.setFont(oBoldFont)
+
+        VSItem = new QTableWidgetItem("CVS")
+        VSItem.setText(FormatPct(vsSPY))
+        if vsSPY >= 0   VSItem.setForeground(brushBlue)   else   VSItem.setForeground(brushRed)   ok
+        VSItem.setBackground(brushLast12BG)
+        VSItem.setTextAlignment(0x0082)
+        VSItem.setFont(oBoldFont)
+
+        oYearlyTable.setItem(rr-1, 0, YearItem)
+        oYearlyTable.setItem(rr-1, 1, PortItem)
+        oYearlyTable.setItem(rr-1, 2, QQQItem)
+        oYearlyTable.setItem(rr-1, 3, SPYItem)
+        oYearlyTable.setItem(rr-1, 4, VQItem)
+        oYearlyTable.setItem(rr-1, 5, VSItem)
+    ok
+
 Return
+

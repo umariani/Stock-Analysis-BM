@@ -15,8 +15,8 @@ oConfigTable    = null
 aGridResults    = []
 aConfigList     = []
 
-aGridRangeMth   = [3, 5, 6, 7, 9, 12]
-aGridTopK       = [5, 7, 10, 12, 15, 20]
+aGridRangeMth   = [5, 6, 7, 9, 12]    // 3, 5, 6
+aGridTopK       = [3, 5, 7, 10, 12, 15]
 nGridBestRM     = 0
 nGridBestTK     = 0
 nGridBestRet    = 0

@@ -200,6 +200,10 @@ Func DrawContribBars()
 
     w = oContribBarLabel.width()
     h = oContribBarLabel.height()
+    // On first paint the label may not yet have layout dimensions;
+    // fall back to the minimumSize that was set in BuildStockContribTab.
+    if w < 50   w = oContribBarLabel.minimumWidth()   ok
+    if h < 50   h = oContribBarLabel.minimumHeight()  ok
     if w < 50 OR h < 50   return   ok
 
     // Top-20 slice
@@ -369,9 +373,13 @@ Func RefreshStockContribTab()
     if ! islist(gList[1])     return   ok
 
     CalcContribData()
-    DrawContribBars()
     PopulateContribTable()
 
+    // processEvents() first so the layout engine assigns real pixel
+    // dimensions to oContribBarLabel before we read width()/height().
     App.processEvents()
+    App.processEvents()   // double flush ensures layout is complete
+
+    DrawContribBars()
 
 Return

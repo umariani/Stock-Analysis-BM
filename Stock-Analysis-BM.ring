@@ -26,20 +26,27 @@ load "Stock-YearlyReturns.ring"
 load "Stock-YearlyVsQQQ.ring"
 load "Stock-AlgoGrid.ring"
 load "Stock-BuyHistory.ring"
+load "Stock-MonthlyResults.ring"
 load "Stock-StockContrib.ring"
 # --------------------------
-$Dollars   = 10000   // How many Shares to Buy with $10,0000    
+$Dollars   = 10000   // How many Shares to Buy with $10,0000  
+todayDate  = " "+ Date() +"  "+ Time()    // "01/01/2026 09:30"  
+sellBelow  = -12     // drops -12% from open for month
 
-stockName  = "TOT"
+stockName  = "TOTal"
 aTimeStamp = []
 aTDate     = []    // to dd/mm/yyy
 aAdjClose  = [] 
 aOpen      = []
 aSymbols   = []             // Extract .ini => array of symbols
+aSymbolsAlpha = []          // Alphabetically sorted copy of aSymbols
+bUpdatingList = false       // Guard: suppress StockListSelected during programmatic updates
 
 aClosedPrices = [[],[]]     // 2D - 162x64  Update Later to [[NbrSymbol],[ADD price entries]]
 
 StockDirection = "DN"       // "DN" StockCount++  "UP" StockCount--
+SortOrder      = "Ranked"   // "Ranked" | "Alpha"  — controls Stk-NEXT/PREV order
+aAlphaList     = []         // alphabetically sorted copy of nList (built in RunAnalysis)
    
 # --------------------------
 
@@ -53,6 +60,7 @@ oChartWidget  = null
 txtLog        = null
 comboInterval = null
 comboRange    = null
+newDate       = null
 
 btnRun        = null
 btnExport     = null
@@ -62,11 +70,24 @@ App           = null
 
 # ADD for Any Widget Field to make it Accessible to Later function
 comboTopTen    = null  // <<<<<
+
+// Interval/setting globals - initialized to defaults so Build* functions
+// can safely reference them before GetQuotes() or RunAnalysis() is called
+cInterval   = "1mo"    // default; updated in GetQuotes() and RunAnalysis()
+cRange      = "2y"
+cTopTen     = "10"
+cRangeMth   = "7"
+cInFileName = ""
+cAlgorithm  = "Momentum (original)"    // default; updated in RunAnalysis()
+
 comboRangeMth  = null  // <<<<<
 comboDebugSet  = null  // <<<<<
+comboAlgorithm = null  // <<<<<  Algorithm Dropdown
 stockSymbol    = null  // <<<<<
 comboStockList = null
+btnSortOrder   = null   // Toggle button: "Ranked" | "Alpha"
 txtDollars     = null  // <<<<
+oSplashLabel = null    // Splash image shown at startup in right panel
 oYearlyTab   = null
 oYearlyChart = null
 oYearlyTable = null
@@ -75,6 +96,14 @@ oHeatmapLabel= null
 oConfigTable = null
 oBuyHistTab    = null    // Buy History Tab
 oContribTab    = null    // Stock Contributions Tab
+
+# --- Overview Tab: Top-Line Summary Stat Cards -------------------------
+oCardReturn    = null    // Total Return   value QLabel
+oCardQQQ       = null    // QQQ / SPY Return  value QLabel
+oCardRatio     = null    // Outperform x (QQQ/SPY)  value QLabel
+oCardCAGR      = null    // Annual CAGR    value QLabel
+oCardSharpe    = null    // Sharpe Ratio   value QLabel
+oCardDD        = null    // Max Drawdown   value QLabel
 
 # ------------------------------
 
@@ -146,7 +175,7 @@ func main
     win = new QWidget() {
         setWinIcon(self,"appicon.png")
         setWindowTitle("Stock Analysis Pro - Ring Edition")
-        resize(1400, 800)
+        resize(1400, 850)
         setStyleSheet(C_STYLE_DARK)
 
         # --- Layouts ---
@@ -177,8 +206,8 @@ func main
                 # ---- ROW 1: Dollars + Debug ----
                 row1Layout = new QHBoxLayout() {
 
-                    # Dollars Label + Edit Box
-                    addWidget(new QLabel(win){setText("Dollars:")})
+                    # --- Dollars Label + Edit Box
+                    addWidget(new QLabel(win){setText(" DollarsPerStock: ")})
                     txtDollars = new QLineEdit(win) {
                         setText("10000")
                         setFixedWidth(80)
@@ -186,8 +215,9 @@ func main
                     }
                     addWidget(txtDollars)
 
-                    # Debug Selections
-                    addWidget(new QLabel(win){setText("Debug:")})
+                    #--------------------
+                    # --- Debug Selections
+                    addWidget(new QLabel(win){setText(" Debug: ")})
                     comboDebugSet = new QComboBox(win){
                             abcList = ["DebugToggle", "HistoryRet", "Array-Data", "Performance", "Sort", "Sort-Name","Rank",
 					         "Buy-Price","Gain","Monthly-Perf","Compound","Summary-Stock",
@@ -195,12 +225,37 @@ func main
                         for x in abcList additem(x,0) next
                         }
                     addWidget(comboDebugSet)
+					
+					//-------------------------
+					// --- Algorithm Selection
+
+					addWidget(new QLabel(win){setText(" Algorithm: ")})
+					comboAlgorithm = new QComboBox(win){
+							abcList = ["Momentum (original)", "All-Pairs Momentum", "Avg Momentum (all months)",
+							           "Moving Average Cross", "MACD", "Sharpe Momentum", "Pullback from High", "Composite (blend)"]
+						for x in abcList additem(x,0) next
+						}
+					addWidget(comboAlgorithm)
+
+					//-------------------------
+					// --- CurrentDate
+
+					addWidget(new QLabel(win){setText(" Date: " )})
+				    newDate = new QLineEdit(win) {
+                        setText("  "+ Date() +"  "+ Time())         // Fill in with Current Date-Time  15/05/2026 09:30
+                        setFixedWidth(130)                      
+                    }
+                    addWidget(newDate)
+					
+					
+					//--------------------------
 
                     # Stretch to push items to the left
                     addStretch(1)
                 }
                 addLayout(row1Layout)
 
+                # --------------------------------------
                 # ---- ROW 2: All original controls ----
                 controlsLayoutInner = new QHBoxLayout() {
                     
@@ -215,7 +270,7 @@ func main
                     # Range
                     addWidget(new QLabel(win){setText("Range:")})
                     comboRange = new QComboBox(win){
-                            abcList = ["5y", "1y", "2y", "10y"]
+                            abcList = ["2y","5y", "1y", "2y", "10y"]
                         for x in abcList additem(x,0) next
                         }
                     addWidget(comboRange)   
@@ -223,7 +278,7 @@ func main
                     # TopTen
                     addWidget(new QLabel(win){setText("TopTen:")})
                     comboTopTen = new QComboBox(win){
-                            abcList = ["10","1","2","3","4","5","6","7","8","9","10","12","15","18","20","25","30","40","50"]
+                            abcList = ["10","7","5","3","1","2","3","4","5","6","7","8","9","10","12","15","18","20","25","30","40","50"]
                         for x in abcList additem(x,0) next
                         }
                     addWidget(comboTopTen)      
@@ -231,7 +286,7 @@ func main
                     # Range-Months
                     addWidget(new QLabel(win){setText("RangeMth:")})
                     comboRangeMth = new QComboBox(win){
-                            abcList = ["7","1","2","3","4","5","6","7","8","9","10","12","16","20","24","28","32","36","40","100","150","200","250","300"]
+                            abcList = ["7","5","28","30","1","2","3","4","5","6","7","8","9","10","12","16","20","24","28","30","32","36","40","50","52","100","150","200","250","300"]
                         for x in abcList additem(x,0) next
                         }
                     addWidget(comboRangeMth)
@@ -268,9 +323,15 @@ func main
                     //-------------------
                     //------------------                
 
-                    # Ranked Stock Scroll List + Nav Buttons
-                    addWidget(new QLabel(win){setText("Ranked Stocks:")})
+                    //--- Sort-Order label + toggle button (left of stock list) ---
+                    addWidget(new QLabel(win){setText("Order:")})
+                    btnSortOrder = new QPushButton(win){setText("Ranked")}
+                    btnSortOrder.setStyleSheet("background-color: #9b59b6; color: white; font-weight: bold;")
+                    btnSortOrder.setFixedWidth(80)
+                    btnSortOrder.setClickEvent("ToggleSortOrder()")
+                    addWidget(btnSortOrder)
 
+                    # Ranked Stock Scroll List + Nav Buttons
                     comboStockList = new QListWidget(win) {
                         setFixedWidth(150)
                         setFixedHeight(95)
@@ -323,6 +384,9 @@ func main
                 addWidget(lblTitle)
 
                 txtLog = new QTextEdit(win){setReadOnly(true)setStyleSheet("font-size: 14px;")setText("Ready to start...")}
+				txtLog.append("Date: "+ Date() +"  "+ Time() )
+                //App.processEvents() # Keep UI responsive
+				
                 addWidget(txtLog)
             }
             setLayout(frameLayout)
@@ -340,7 +404,19 @@ func main
                 addWidget(lblTitle)
 
                 oChartWidget = new StockChart( win)
+                oChartWidget.hide()   // Hidden until Run Analysis is clicked
                 addWidget(oChartWidget)
+
+                # Splash image shown at startup — capped to natural image size (373x576)
+                oSplashLabel = new QLabel(win) {
+                    splashPixmap = new QPixmap("CapAmer-1.png")
+                    scaledPixmap = splashPixmap.scaled(373, 576, 1, 1)  // natural size, KeepAspectRatio=1, SmoothTransform=1
+                    setPixmap(scaledPixmap)
+                    setAlignment(132)   // Qt::AlignHCenter | Qt::AlignVCenter
+                    setScaledContents(false)
+                    setMaximumSize(373, 576)
+                }
+                addWidget(oSplashLabel)
             }
             setLayout(frameLayout)
         }
@@ -372,27 +448,58 @@ func main
             }
         ")
 
-        // --- Tab 0 -- existing Overview (Log + Chart)
-        tabPage0 = new QWidget()
+        // --- Tab 0 -- existing Overview (Stat Cards + Log + Chart)
+        tabPage0  = new QWidget()
+        overviewV = new QVBoxLayout()
+
+        # --- Top-Line Summary Stat Cards --------------------------------
+        cardsRow = new QHBoxLayout() {
+            setSpacing(8)
+            setContentsMargins(0, 0, 0, 0)
+        }
+        oCardReturn = BuildStatCard(win, cardsRow, "Total Return")
+        oCardQQQ    = BuildStatCard(win, cardsRow, "QQQ / SPY Return")
+        oCardRatio  = BuildStatCard(win, cardsRow, "Outperform x (QQQ/SPY)")
+        oCardCAGR   = BuildStatCard(win, cardsRow, "Annual CAGR")
+        oCardSharpe = BuildStatCard(win, cardsRow, "Sharpe Ratio")
+        oCardDD     = BuildStatCard(win, cardsRow, "Max Drawdown")
+
+        cardsFrame = new QWidget() {
+            setMaximumHeight(46)
+        }
+        cardsFrame.setLayout(cardsRow)
+        overviewV.addWidget(cardsFrame)
+
         existingH = new QHBoxLayout()
         existingH.addWidget(groupData)
         existingH.addWidget(groupChart)
         existingH.setStretch(0, 1)
         existingH.setStretch(1, 2)
-        tabPage0.setLayout(existingH)
+
+        existingWrap = new QWidget()
+        existingWrap.setLayout(existingH)
+        overviewV.addWidget(existingWrap)
+
+        tabPage0.setLayout(overviewV)
         oTabMain.addTab(tabPage0, "Overview")
 
         // --- Tab 1 -- Yearly vs QQQ
         BuildYearlyTab(oTabMain)
 
-        // Tab 2 -- Algorithm Grid
-        BuildAlgoGridTab(oTabMain)
+//        // Tab 2 -- Algorithm Grid
+//        BuildAlgoGridTab(oTabMain)
 
         // Tab 3 -- Buy History
         BuildBuyHistTab(oTabMain)
 
-        // Tab 4 -- Stock Contributions
+        // Tab 4 -- Monthly Results
+        BuildMonthlyResultsTab(oTabMain)
+
+        // Tab 5 -- Stock Contributions
         BuildStockContribTab(oTabMain)
+		
+        // Tab 2 -- Algorithm Grid
+        BuildAlgoGridTab(oTabMain)		
 
         oTabMain.setCurrentChangedEvent("OnTabChanged()")
         contentLayout.addWidget(oTabMain)
@@ -445,7 +552,17 @@ Func DollarsChanged()
 
 Func GetQuotes()
 
-btnRun.setEnabled(true)   // Disable until Get Quotes done
+    # Restore splash image and hide chart when getting new quotes
+    oChartWidget.hide()
+    if oSplashLabel != null
+        oSplashLabel.show()
+    ok
+
+btnRun.setEnabled(true)              // Disable until Get Quotes done
+
+    todayDate = Date() +" "+ Time()  // In newDate Label
+	newDate.setText("  "+ todayDate)
+
 
 ExtractYear = 0         // 1=Year  0=Month
 
@@ -459,6 +576,7 @@ $Range    = '5y'        // '10y'  // <<< Range     $url6   "1y","2y","5y","10y"
     cRange      = comboRange.currentText()
     cTopTen     = comboTopTen.currentText()
     cRangeMth   = comboRangeMth.currentText()
+    cAlgorithm  = comboAlgorithm.currentText()
     cFile       = txtTickerFile.text()
     cInFileName = txtTickerFile.text() 
     
@@ -467,15 +585,13 @@ $Interval =    cInterval    // Curl GetQuotes
 $Range    =    cRange       // Curl GetQuores
 $Top10    = 0+ cTopTen      // YearlyReturns
 $RangeMth = 0+ cRangeMth    // YearlyReturns  "$RangeMth" is Month Range | NOT $Range for Curl
+$Algorithm=    cAlgorithm   // YearlyReturns  Ranking Algorithm selected
 
 
 See "GetQuotes: $Interval: "+ $Interval +" $Range: "+ $Range +" $Top10: "+ $Top10 +" RangeMth: "+ $RangeMth +" Quotes: "+ cInFileName +nl 
 
 
 //------------------------------------------------------------
-
-$csvSpread   =  "AAA-Spread.csv"        # Directory + SpreadSheet New to OLD reversed
-fpSpread     =  fopen($csvSpread,"w")   # Write to SpreadSheet CSV file
 
   DirName      =    CurrentDir()
 //cInFileName  =    cFile              // Already extracted
@@ -503,13 +619,15 @@ Add(aSymbols,"QQQ")
 Add(aSymbols,"SPY") 
 
 
-//==================================================================
-//==================================================================
+    //==================================================================
+    //==================================================================
+    
+    ###-------------------------------------------------------------
+    ### HISTORY.ini --- Get SYMBOL from Quote.ini each line in file
+    ### NOTE: this list must be built BEFORE the "no internet" check below,
+    ###       since aSymbolsAlpha is needed either way (online or offline)
 
-###-------------------------------------------------------------
-### HISTORY.ini --- Get SYMBOL from Quote.ini each line in file
-
-fpIn = fopen(cInFileName,"r")             //  Yahoo    BigCharts   DividendChannel   
+    fpIn = fopen(cInFileName,"r")             //  Yahoo    BigCharts   DividendChannel   
     while not feof(fpIn)                  //  BMO.TO   CA:BMO      BMO.CA
         line   = Readline(fpIn)           //  CTC-A.TO CA:CTC.A    CTC.A.CA
         if line != ''                     //  ACO-X.TO CA:ACO.X    ACO.X.CA
@@ -519,6 +637,10 @@ fpIn = fopen(cInFileName,"r")             //  Yahoo    BigCharts   DividendChann
             Add(aSymbols, $Symbol)   
         ok
     end
+    fclose(fpIn)
+
+    //--- Build alphabetically sorted copy of aSymbols for Alpha navigation ---
+    aSymbolsAlpha = sort( aSymbols )
     
 
 
@@ -530,9 +652,81 @@ fpIn = fopen(cInFileName,"r")             //  Yahoo    BigCharts   DividendChann
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U;") 
 
 
-aClosedPrices = List(len(aSymbols), 1) 
-count = 1   
-foreach $Symbol in aSymbols
+    //========================================================================
+    // CONNECTIVITY PRE-CHECK -- fix 2026-Aug-23
+    // Test the FIRST symbol before opening/truncating AAA-Spread.csv.
+    // The old code opened AAA-Spread.csv for "w" (which erases it) BEFORE
+    // ever checking whether we had internet, so a saved file was destroyed
+    // the instant Get Quotes was clicked -- even when offline. Testing first
+    // means a saved AAA-Spread.csv / AAA-Spread.csv.bkp is never touched
+    // unless we actually have fresh data to replace it with.
+    //========================================================================
+
+    $Symbol = aSymbols[1]
+    $url2   = $Symbol
+    $url4   = $Interval
+    $url6   = $Range
+    $URL    = $url1 + $url2 + $url3 + $url4 + $url5 + $url6
+
+    curl_easy_setopt(curl, CURLOPT_URL, $url)
+    cStr = curl_easy_perform_silent(curl)
+
+	// --------------------------------------
+	// NO INTERNET -- fall back to previously saved quotes, don't touch the CSV
+	// --------------------------------------
+
+    if ( len(cStr) = 0 )
+
+        See "Date: "+ Date() +"  "+ Time() +nl
+        See nl+"NO INTERNET CONNECTION: " +nl +"USING PREVIOUSLY SAVED QUOTES: " +nl
+
+        txtLog.append("NO INTERNET CONNECTION -- using previously saved quotes")
+        App.processEvents()                         # Keep UI responsive
+
+        //--- Prefer the .bkp written after the last FULLY successful GetQuotes()
+        //    (see line ~930), fall back to whatever AAA-Spread.csv already has
+        //    on disk. Neither file was opened/truncated above, so both are
+        //    still intact -- unlike before this fix.
+
+        if fexists("AAA-Spread.csv.bkp")
+            See 'DEBUG: Will Use existing "AAA-Spread.csv.bkp" '+nl 
+            cString =  Read("AAA-Spread.csv.bkp")           // bkp OLD CSV
+                       Write("AAA-Spread.csv", cString)      // refresh working copy
+            txtLog.append("Using AAA-Spread.csv.bkp (last successful download)")
+        else
+            if fexists("AAA-Spread.csv")
+                See 'DEBUG: No "AAA-Spread.csv.bkp" found -- using existing "AAA-Spread.csv" '+nl 
+                txtLog.append("Using AAA-Spread.csv as-is (no backup file found)")
+            else
+                See 'ERROR: No saved quotes found (AAA-Spread.csv / AAA-Spread.csv.bkp missing)'+nl 
+                txtLog.append("ERROR: No internet AND no saved quotes file found -- cannot run analysis")
+                App.processEvents()
+                return   // Nothing we can do without any data at all
+            ok
+        ok
+
+        // Call RunAnalysis() (not just YearlyReturns()) so the offline run
+        // finishes exactly like a normal one: hides the splash image, shows
+        // the chart, refreshes the stat cards / stock list / other tabs, and
+        // runs the RangeMth/TopK grid search ("Grid best: ..."). Calling
+        // YearlyReturns() alone -- the previous behaviour -- left the splash
+        // image on screen and skipped the grid search entirely.
+        RunAnalysis()
+
+        return // Skip the live-download loop below
+
+    ok
+
+    //========================================================================
+    // INTERNET IS AVAILABLE -- proceed with the normal live download
+    //========================================================================
+
+$csvSpread   =  "AAA-Spread.csv"        # Directory + SpreadSheet New to OLD reversed
+fpSpread     =  fopen($csvSpread,"w")   # Write to SpreadSheet CSV file
+
+    aClosedPrices = List(len(aSymbols), 1) 
+    count = 1   
+    foreach $Symbol in aSymbols
 
     
 
@@ -556,29 +750,33 @@ foreach $Symbol in aSymbols
             // See nl+"len(cStar): "+ len(cStr) +nl
     
 	// --------------------------------------
-	// NO INTERNET
+	// CONNECTION LOST MID-DOWNLOAD (rare) -- don't leave a half-written
+	// AAA-Spread.csv on disk; restore the last good backup instead.
+	// --------------------------------------
 	
     if ( len(cStr) = 0 )  
-        See nl+"NO INTERNET CONNECTION: " +nl +"CONNECT TO INTERNET AND TRY AGAIN: " +nl
-        See "Press Enter to Exit"+ nl
-        keyChar = GetChar()   
-
-            // ----------------------------------------
-            // csvFile = "AAA-Spread.csv"   // NEEDED
-			// Extract CSV into aList
-			// QQQ,  305.65, 305.65, 305.65, 
-	        // SPY,  346.47, 346.47, 346.47, 
-
-			
-		See 'Continue: Will Use OLD "AAA-Spread-bkp.csv" '+nl 
+	    See "Date: "+ Date() +"  "+ Time() +nl
+        See nl+"CONNECTION LOST MID-DOWNLOAD: " +nl +"USING PREVIOUSLY SAVED QUOTES: " +nl
 		
-            cString =  Read("AAA-Spread-bkp.csv")		// OLD CSV
-		              Write("AAA-Spread.csv", cString)  // Cur CSV  fake out
-			
-			
-       
-       return 
-    ok  
+		txtLog.append("Connection lost mid-download -- restoring last good quotes")
+		App.processEvents()                         # Keep UI responsive
+		
+        fclose(fpSpread)                  // opened above -- close before overwriting
+
+        if fexists("AAA-Spread.csv.bkp")
+            cString =  Read("AAA-Spread.csv.bkp")	      // bkp OLD CSV
+                       Write("AAA-Spread.csv", cString)  // restore working copy
+        ok
+
+        // Same reasoning as the pre-check branch above -- RunAnalysis()
+        // finishes the UI properly (hides splash, shows chart, grid search).
+        RunAnalysis()
+
+        return // Do nothing
+
+    ok  	
+	
+  
     
     //===========================================================================
     //  Line 33 Parsing Error (JSONLib) : Can't parse the content
@@ -595,8 +793,11 @@ foreach $Symbol in aSymbols
     //---JSON ERROR in YAHOO----------------------------------
     
     if  subStr(cStr, '<title>Yahoo! - Error report</title>' )
-        See "Yahoo! - Error report: "+nl
+                  See ""+ $Symbol +"  JSON: Yahoo! - Error report:  " +nl
+				  
         txtLog.append(""+ $Symbol +"  JSON: Yahoo! - Error report:  " )
+		App.processEvents() # Keep UI responsive
+				
         continue
     ok
 
@@ -675,6 +876,11 @@ foreach $Symbol in aSymbols
     //-----------------------------------------------------
     //	USING OPEN Prices
 	//--- Use Last Close Price to Chart last most recent trading close price
+
+    if len(aTimeStamp) = 0 
+       See " "+ $Symbol +" lenTS: "+ len(aTimeStamp) +nl
+       continue
+    ok
 	
 	lenTime        = len(aTimeStamp)
 	aOpen[lenTime] = aAdjClose[lenTime]    // FIX use last close for Chart Display
@@ -761,6 +967,8 @@ foreach $Symbol in aSymbols
     count++
     
  next  // End -- foreach $Symbol in aSymbols
+ 		txtLog.append("Date: "+ Date() +"  "+ Time() )
+        App.processEvents() # Keep UI responsive
  
  
    // --- DATE ------------
@@ -776,8 +984,10 @@ foreach $Symbol in aSymbols
  
  //---------------------
  // CLOSE EXCEL SpreadSheet: ... Error in parameter, NULL pointer!
- 
- fclose(fpSpread)     //   Error in parameter, NULL pointer!  IF EXCEL IS OPEN.  Close it      
+    fclose(fpSpread)         //  Error in parameter, NULL pointer!  IF EXCEL IS OPEN.  Close it  
+
+    cRead = Read($csvSpread)           // make a bkp for offline
+	Write($csvSpread +".bkp", cRead)
  
  //--------------------
  
@@ -815,21 +1025,24 @@ foreach $Symbol in aSymbols
  //=================================================================
 
 Func RunAnalysis()
-    YearlyReturns()         // Runs full analysis — populates nList, pList, etc.
-    
-    // Clear and re-populate the ranked stock scroll list
-    comboStockList.clear()
-    
-    if len(nList) > 0 AND islist(nList[1])
-        PosEnd = len(nList[1])              // Last col = stock name ranked by perf
-        for i = 1 to len(nList)
-            sName = nList[i][PosEnd]
-            comboStockList.addItem( string(i) + ". " + sName )
-        next
+    # Hide splash image and reveal chart panel
+    if oSplashLabel != null
+        oSplashLabel.hide()
+    ok
+    oChartWidget.show()
+
+    YearlyReturns()         // Runs full analysis — populates nList ranked by performance
+
+    UpdateStatCards()       // Push Total Return / QQQ Return / Outperform x / CAGR / Sharpe / Max Drawdown
+
+    // aSymbolsAlpha already built when .ini was read in GetQuotes()
+    // Just refresh the scroll list in whatever order is selected
+    StockCount = 1
+    PopulateStockList()
+
+    if len(nList) > 0
         txtLog.append("Stock list updated: " + string(len(nList)) + " stocks ranked.")
     ok
-
-    StockCount = 1          // Reset navigator to rank #1
 
     App.processEvents()
 
@@ -838,6 +1051,7 @@ Func RunAnalysis()
 
     RunAlgoGrid()
     RefreshBuyHistTab()
+    RefreshMonthlyResultsTab()
     RefreshStockContribTab()
 
 return
@@ -875,14 +1089,17 @@ return
 // PREV 
 
 Func DisplayStockUp()
-    StockDirection = "Up"   // StockCount--
+    StockDirection = "Up"
 
-    StockCount--
-    if StockCount < 1
-        StockCount = len(nList)       // Wrap around to end
+    nMax = comboStockList.count()
+    if nMax = 0
+        PopulateStockList()
+        nMax = comboStockList.count()
     ok
 
-    PopulateStockList()
+    StockCount--
+    if StockCount < 1   StockCount = nMax   ok
+
     DisplayStock()
 
 return
@@ -890,78 +1107,94 @@ return
 //=====================
 // NEXT
     
-Func DisplayStockDn()   
+Func DisplayStockDn()
 
-    StockDirection = "DN"   // StockCount++
+    StockDirection = "DN"
 
-    StockCount++
-    if StockCount > len(nList)
-        StockCount = 1             // Wrap around to start
+    nMax = comboStockList.count()
+    if nMax = 0
+        PopulateStockList()
+        nMax = comboStockList.count()
     ok
 
-    PopulateStockList()
+    StockCount++
+    if StockCount > nMax   StockCount = 1   ok
+
     DisplayStock()
-    
+
 return
 
 //=================================================
 // DISPLAY STOCK -- aSumTotal -- MU,LRCX APP etc
 
 Func DisplayStock()
-    
-        
-        if StockCount > len(nList)
-           StockCount = 1             // Reset if Count 35 :: 34
-        ok   
-        
-            
-        PosEnd    = len(nList[1])                        // Col len for QQQ = nbr of Months
-        stockName = nList[StockCount][posEnd]            // nList Name by Perf
-        
-        stockSymbol.setText(stockName +"  "+ StockCount)
 
-        # Sync list widget highlight to current rank (1-based index -> 0-based row)
-        if comboStockList.count() > 0
-            comboStockList.setCurrentRow(StockCount - 1, 3)   // 3 = QItemSelectionModel::ClearAndSelect
+        if len(nList) = 0  return  ok
+
+        if SortOrder = "Alpha"
+
+            // In Alpha mode, StockCount is the 1-based row in the sorted list widget
+            nRows = comboStockList.count()
+            if nRows = 0  return  ok
+            if StockCount < 1         StockCount = nRows   ok
+            if StockCount > nRows     StockCount = 1       ok
+
+            // Get ticker name directly from the sorted list widget
+            bUpdatingList = true
+            comboStockList.setCurrentRow(StockCount - 1, 3)
+            bUpdatingList = false
+            stockName = comboStockList.item(StockCount - 1).text()
+
+            // Strip the "   N" rank number appended to the right of the ticker
+            aTok = split(stockName, " ")
+            if len(aTok) > 0
+                stockName = aTok[1]
+            ok
+
+        else
+
+            // Ranked mode — ticker name is in the LAST column of nList
+            if StockCount < 1             StockCount = len(nList)   ok
+            if StockCount > len(nList)    StockCount = 1            ok
+            PosEnd    = len(nList[1])
+            stockName = nList[StockCount][PosEnd]
+            if comboStockList.count() > 0
+                bUpdatingList = true
+                comboStockList.setCurrentRow(StockCount - 1, 3)
+                bUpdatingList = false
+            ok
+
         ok
- 
+
+        stockSymbol.setText(stockName + "  " + StockCount)
+
         for k = 1 to len(aList)
             if aList[k][1] = stockName
-
-                aSumTotal[1] = aList[1]       // Nbrs
-                aSumTotal[2] = pList[1]       // QQQ   <<<< Perf = Normalize
-                aSumTotal[3] = aList[k]       // Symbol <<<< STOCK Sym + Prices  
-	
-            ok    
+                aSumTotal[1] = aList[1]
+                aSumTotal[2] = pList[1]
+                aSumTotal[3] = aList[k]
+                aSumTotal[4] = pList[2]      // SPY performance row (pList row 2)
+            ok
         next
- 
-        if StockCount <= len(nList) 
+
+        if StockCount <= len(nList)
 
             LenD = len(aSumTotal[3])
-            //See "PerfRank: "+ StockCount +" "+ stockName +tab+ "Last: "+aSumTotal[3][LenD-1] +tab+"Cur: "+ 
-			
-			aSumTotal[3][LenD] +nl
-              
-            //--- Del the Name portion in Pos-1  ---
-            
-                Del(aSumTotal[1], len(aSumTotal[1]) )    // Numbers 1..60  FIX
-                Del(aSumTotal[1],1)
-                
-                Del(aSumTotal[2], len(aSumTotal[2]) )    // QQQ 1..60
-                Del(aSumTotal[2],1)
-                
-                //Del(aSumTotal[3], len(aSumTotal[3]) )  // TOT or Stock-Sym Values 1..60
-                Del(aSumTotal[3],1)      // Symbol pos 1
-                
-            //-----------------------------------
-            // Debug last price entry
-		    // LenD = len(aSumTotal[3])
-		    // See  "aSumTotal3: "+ LenD +" Name "+ aSumTotal[3][1] +" "+ aSumTotal[3][2]+" "+     //       aSumTotal[3][LenD-2]+" "+ aSumTotal[3][LenD-1] +" "+ aSumTotal[3][LenD] +nl
 
+            Del(aSumTotal[1], len(aSumTotal[1]))
+            Del(aSumTotal[1], 1)
 
-            oChartWidget.setData(aSumTotal)   // <<<=== DRAW CHART  Use Azzeddine Chart
-            
-        ok    
+            Del(aSumTotal[2], len(aSumTotal[2]))
+            Del(aSumTotal[2], 1)
+
+            Del(aSumTotal[3], 1)
+
+            Del(aSumTotal[4], len(aSumTotal[4]))
+            Del(aSumTotal[4], 1)
+
+            oChartWidget.setData(aSumTotal)
+
+        ok
 
 return  
 
@@ -971,20 +1204,86 @@ return
 
 Func PopulateStockList()
 
-    if comboStockList.count() > 0
-        return          // Already populated
-    ok
+    comboStockList.clear()
 
     if len(nList) = 0
-        return          // nList not ready yet
+        return
     ok
 
-    PosEnd = len(nList[1])              // Last col holds the stock name
+    if SortOrder = "Alpha"
 
-    for i = 1 to len(nList)
-        sName = nList[i][PosEnd]
-        comboStockList.addItem( string(i) + ". " + sName )
-    next
+        // Build a symbol -> rank lookup from nList (Ranked order) so we can
+        // show each stock's rank number to the right of its ticker below
+        aRankLookup = []
+        if len(nList) > 0 AND islist(nList[1])
+            PosEndR = len(nList[1])
+            for i = 1 to len(nList)
+                symTmp = nList[i][PosEndR]
+                if isstring(symTmp)
+                    aRankLookup + [symTmp, i]
+                ok
+            next
+        ok
+
+        // Find the longest ticker so the rank numbers line up in a column
+        nMaxLen = 0
+        for i = 1 to len(aSymbolsAlpha)
+            sName = aSymbolsAlpha[i]
+            if sName != "Date" AND len(sName) > nMaxLen
+                nMaxLen = len(sName)
+            ok
+        next
+
+        // aSymbolsAlpha was sorted when the .ini file was read in GetQuotes()
+        for i = 1 to len(aSymbolsAlpha)
+            sName = aSymbolsAlpha[i]
+            if sName != "Date"
+
+                nRank = 0
+                for k = 1 to len(aRankLookup)
+                    if aRankLookup[k][1] = sName
+                        nRank = aRankLookup[k][2]
+                        exit
+                    ok
+                next
+
+                sLine = sName
+                for k = len(sName) to nMaxLen
+                    sLine = sLine + " "
+                next
+                sLine = sLine + "   "
+                if nRank > 0
+                    sLine = sLine + string(nRank)
+                ok
+
+                comboStockList.addItem(sLine)
+            ok
+        next
+
+    else
+
+        // Ranked order — nList sorted by performance, ticker name is in the LAST column
+        if len(nList) > 0 AND islist(nList[1])
+            PosEnd = len(nList[1])
+            for i = 1 to len(nList)
+                sName = nList[i][PosEnd]
+                if isstring(sName) AND sName != "Date"
+                    comboStockList.addItem(string(i) + ". " + sName)
+                ok
+            next
+        ok
+
+    ok
+
+    // Sync highlight to current position — guard flag prevents StockListSelected firing
+    if comboStockList.count() > 0
+        syncRow = StockCount - 1
+        if syncRow >= 0 AND syncRow < comboStockList.count()
+            bUpdatingList = true
+            comboStockList.setCurrentRow(syncRow, 3)
+            bUpdatingList = false
+        ok
+    ok
 
 return
 
@@ -993,45 +1292,54 @@ return
 
 Func StockListSelected()
 
+    // Ignore programmatic row changes triggered by PopulateStockList / DisplayStock
+    if bUpdatingList  return  ok
+
     row = comboStockList.currentRow()   // 0-based
     if row < 0  return  ok
 
-    StockCount     = row + 1            // 1-based rank
-    StockDirection = "DN"               // keep direction neutral (NEXT will increment after)
+    StockCount     = row + 1
+    StockDirection = "DN"
 
-    // Call core display without re-populating or advancing counter
-    if StockCount > len(nList)
-        StockCount = len(nList)
+    // Get ticker name from the list widget using item(row).text()
+    stockName = comboStockList.item(row).text()
+
+    // Strip the "N. " rank prefix present in Ranked mode
+    if SortOrder = "Ranked"
+        dotPos = substr(stockName, ". ")
+        if dotPos > 0
+            stockName = substr(stockName, dotPos + 2)
+        ok
+    else
+        // Strip the "   N" rank number appended to the right in Alpha mode
+        aTok = split(stockName, " ")
+        if len(aTok) > 0
+            stockName = aTok[1]
+        ok
     ok
 
-    PosEnd    = len(nList[1])
-    stockName = nList[StockCount][posEnd]
+    if stockName = "Date"  return  ok
 
-    stockSymbol.setText(stockName +"  "+ StockCount)
+    stockSymbol.setText(stockName + "  " + StockCount)
 
     for k = 1 to len(aList)
         if aList[k][1] = stockName
-
             aSumTotal[1] = aList[1]
             aSumTotal[2] = pList[1]
             aSumTotal[3] = aList[k]
-
+            aSumTotal[4] = pList[2]      // SPY performance row (pList row 2)
         ok
     next
 
-    if StockCount <= len(nList)
+    Del(aSumTotal[1], len(aSumTotal[1]))
+    Del(aSumTotal[1], 1)
+    Del(aSumTotal[2], len(aSumTotal[2]))
+    Del(aSumTotal[2], 1)
+    Del(aSumTotal[3], 1)
+    Del(aSumTotal[4], len(aSumTotal[4]))
+    Del(aSumTotal[4], 1)
 
-        Del(aSumTotal[1], len(aSumTotal[1]) )
-        Del(aSumTotal[1], 1)
-
-        Del(aSumTotal[2], len(aSumTotal[2]) )
-        Del(aSumTotal[2], 1)
-
-        Del(aSumTotal[3], 1)
-
-        oChartWidget.setData(aSumTotal)
-
-    ok
+    oChartWidget.setData(aSumTotal)
 
 return
 
@@ -1039,6 +1347,30 @@ return
 //=============================================================
 // bList = BuyPrice 
 
+
+//=============================================================
+// TOGGLE between Ranked and Alphabetical navigation order
+
+Func ToggleSortOrder()
+    if SortOrder = "Ranked"
+        SortOrder = "Alpha"
+        btnSortOrder.setText("Alpha")
+        btnSortOrder.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
+    else
+        SortOrder = "Ranked"
+        btnSortOrder.setText("Ranked")
+        btnSortOrder.setStyleSheet("background-color: #9b59b6; color: white; font-weight: bold;")
+    ok
+
+    StockCount = 1          // Reset to first position in new order
+    if len(nList) > 0
+        PopulateStockList()
+        DisplayStock()
+    ok
+
+return
+
+//=============================================================
 
 Func exportCSV()
 
@@ -1087,6 +1419,10 @@ See "IN ExportCSV "+nl
 Func OnTabChanged()
     DrawYearly()
     DrawHeatmap()
+    // Redraw bar chart when tab is activated -- ensures correct label dimensions
+    if len(aContribData) > 0
+        DrawContribBars()
+    ok
 Return
 
 Func EpochToDate(EpochSecs)
@@ -1094,8 +1430,135 @@ Func EpochToDate(EpochSecs)
    NbrDays   = EpochSecs / 86400                    // 1726776001
    DateHuman = AddDays( "01/01/1970", NbrDays )
  return DateHuman                                   // 19/09/2024
- 
- 
+
+
+//=================================================================
+// STAT CARDS  -- Overview Tab top-line summary (Total Return, QQQ
+// Return, Outperform x, Annual CAGR, Sharpe Ratio, Max Drawdown)
+// Mirrors the "cards_frame" row in the Python app (Stock_Analysis_GUI_v2.py)
+//=================================================================
+
+// Builds one card (title + big value) and adds it to oLayout.
+// Returns the value QLabel so callers can update its text/color later.
+
+Func BuildStatCard(parentWin, oLayout, cTitle)
+
+    oFrame = new QFrame(parentWin, 0) {
+        setFrameShape(QFrame_StyledPanel)
+        setStyleSheet("QFrame { background-color: #dceeff; border: 1px solid #a9cdec; border-radius: 5px; }")
+    }
+
+    oHBox = new QHBoxLayout() {
+        setContentsMargins(12, 6, 12, 6)
+        setSpacing(6)
+
+        oTitleLbl = new QLabel(parentWin) {
+            setText(cTitle + ":")
+            setStyleSheet("color: #000000; font-size: 12px; font-weight: bold; border: none; background: transparent;")
+        }
+        addWidget(oTitleLbl)
+
+        oValueLbl = new QLabel(parentWin) {
+            setText("--")
+            setStyleSheet("color: #000000; font-size: 12px; font-weight: bold; border: none; background: transparent;")
+        }
+        addWidget(oValueLbl)
+
+        addStretch(1)
+    }
+    oFrame.setLayout(oHBox)
+    oLayout.addWidget(oFrame)
+
+Return oValueLbl
+
+//-----------------------------------------------------------------
+// Pushes the freshly-computed globals ( $maxTOT / $maxQQQ / $Ratio /
+// $CAGR / $Sharpe / $MaxDD -- all set in Stock-YearlyReturns.ring )
+// into the stat cards. Called from RunAnalysis() after YearlyReturns().
+
+Func UpdateStatCards()
+
+    if oCardReturn = null  return  ok
+
+    nTotRet = ($maxTOT  - 1) * 100
+    nQQQRet = ($maxQQQ  - 1) * 100
+    nSPYRet = ($maxSPY  - 1) * 100
+    nCAGR   =  $CAGR         * 100
+    nMaxDD  =  $MaxDD        * 100
+
+    oCardReturn.setText( FmtSigned(nTotRet, 1) + "%" )
+    SetCardColor(oCardReturn, "#000000")
+
+    oCardQQQ.setText( "QQQ " + FmtSigned(nQQQRet, 1) + "%   SPY " + FmtSigned(nSPYRet, 1) + "%" )
+    SetCardColor(oCardQQQ, "#000000")
+
+    oCardRatio.setText( FmtNum($Ratio, 2) + "x / " + FmtNum($RatioSPY, 2) + "x" )
+    SetCardColor(oCardRatio, "#000000")
+
+    oCardCAGR.setText( FmtSigned(nCAGR, 1) + "%" )
+    SetCardColor(oCardCAGR, "#000000")
+
+    oCardSharpe.setText( FmtNum($Sharpe, 3) )
+    SetCardColor(oCardSharpe, "#000000")
+
+    oCardDD.setText( "-" + FmtNum(nMaxDD, 1) + "%" )
+    SetCardColor(oCardDD, "#b02a24")
+
+Return
+
+//-----------------------------------------------------------------
+
+Func SetCardColor(oLbl, cColor)
+    oLbl.setStyleSheet("color: "+ cColor +"; font-size: 12px; font-weight: bold; border: none; background: transparent;")
+Return
+
+//-----------------------------------------------------------------
+// Dark green if >= 0,  Dark red if < 0  (kept readable on the pale-blue card)
+
+Func PickColor(n)
+    if n >= 0  return "#0d5fa8"  ok
+Return "#b02a24"
+
+//-----------------------------------------------------------------
+// Round to nDec decimals and prepend a "+" sign when >= 0
+// eg FmtSigned(287.14, 1) => "+287.1"   FmtSigned(-14.2, 1) => "-14.2"
+
+Func FmtSigned(n, nDec)
+    cSign = ""
+    if n >= 0  cSign = "+"  ok
+Return cSign + FmtNum(n, nDec)
+
+//-----------------------------------------------------------------
+// Format n to exactly nDec decimal places (Ring has no built-in round(),
+// so we roll our own using floor() -- same trick as NumFmt() in
+// Stock-YearlyReturns.ring, just with a configurable decimal count).
+// eg FmtNum(287.14, 1) => "287.1"   FmtNum(-14.26, 2) => "-14.26"
+
+Func FmtNum(n, nDec)
+    n      = 0 + n            // ensure numeric
+    cSign  = ""
+    if n < 0   cSign = "-"   n = -n   ok
+
+    nFactor  = 1
+    for i = 1 to nDec
+        nFactor *= 10
+    next
+
+    nScaled = floor(n * nFactor + 0.5)     // round to nDec decimals
+    nInt    = floor(nScaled / nFactor)
+    nFrac   = nScaled - (nInt * nFactor)
+
+    if nDec = 0
+        return cSign + string(nInt)
+    ok
+
+    cFrac = string(nFrac)
+    while len(cFrac) < nDec
+        cFrac = "0" + cFrac
+    end
+
+Return cSign + string(nInt) + "." + cFrac
+
 //////////////////////////////////////////////
 ///////////////////////////////////////////////
 
@@ -1278,4 +1741,4 @@ FORMATED Data in WebPage
     }
 }
 
-////////////////////////
+*/
